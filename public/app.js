@@ -438,7 +438,6 @@ async function loadStaticSearchIndex() {
   if (staticSearchLoaded && staticSearchIndex) return staticSearchIndex;
 
   if (staticSearchLoading) {
-    // すでに読み込み中なら終わるのを軽く待つ
     while (staticSearchLoading) {
       await new Promise((r) => setTimeout(r, 50));
     }
@@ -446,8 +445,10 @@ async function loadStaticSearchIndex() {
   }
 
   staticSearchLoading = true;
+
   try {
-    const res = await fetch("/_search_source.json", { cache: "no-store" });
+    // ★ここだけパスを合わせる
+    const res = await fetch("/build_plain_articles/_search_source.json", { cache: "no-store" });
     if (!res.ok) {
       throw new Error("_search_source.json が見つかりません");
     }
