@@ -1,7 +1,7 @@
 name: Deploy KJD site on data update
 
 on:
-  # kjdweb-data からの通知
+  # kjdweb-data からの通知イベント
   repository_dispatch:
     types: [kjdweb-data-updated]
 
@@ -17,11 +17,11 @@ jobs:
       - name: Checkout main site repo
         uses: actions/checkout@v4
 
-      # 2) Node を用意
+      # 2) Node.js をセットアップ
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20'
 
       # 3) kjdweb-data から static データを public/ に同期
       - name: Sync static data from kjdweb-data
