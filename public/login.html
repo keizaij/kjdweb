@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<title>ログイン</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
+
+<style>
+  /* (CSS部分は変更なし。そのまま使用できます。) */
+  body {
+    font-family: sans-serif;
+    background-color: #f4f4f4;
+    margin: 0;
+  }
+
+/* 一度だけ全体に置くと良い（ヘッダ近くでOK） */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+  .wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+  }
+
+  .login-container {
+    background-color: #fff;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    max-width: 350px;
+  }
+
+  h2 {
+    color: #333;
+    margin-bottom: 25px;
+  }
+
+  input[type="text"],
+  input[type="password"] {
+    width: calc(100% - 22px);
+    padding: 12px 10px;
+    margin: 10px 0;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    box-sizing: border-box;
+  }
+
+  button {
+    background-color: #808080;
+    color: white;
+    padding: 12px 25px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    width: 100%;
+    margin-top: 15px;
+  }
+
+  button:hover {
+    background-color: #004080;
+  }
+
+  #message {
+    color: red;
+    margin-top: 20px;
+    font-size: 14px;
+    min-height: 20px;
+  }
+
+  .register-link {
+    display: block;
+    margin-top: 20px;
+    color: #007bff;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .register-link:hover {
+    text-decoration: underline;
+  }
+
+  /* スマホ用のスタイルを新しいクラスで定義 */
+/* iOSの入力フォーカス拡大対策（16px以上） */
+input, select, textarea { font-size: 16px; }
+
+/* === モバイル用 === */
+.mobile-mode .login-container {
+  max-width: min(480px, 92vw);
+  margin: 0 auto;
+  padding: 24px 16px;   /* 80px→コンパクトに */
+}
+
+.mobile-mode h2 {
+  /* 端末幅に応じて 20–24pxの範囲で可変 */
+  font-size: clamp(20px, 5.5vw, 24px);
+  margin-bottom: 16px;
+  line-height: 1.2;
+}
+
+.mobile-mode input[type="text"],
+.mobile-mode input[type="password"] {
+  width: 100%;
+  font-size: 16px;      /* iOS拡大しない下限＆十分読みやすい */
+  line-height: 1.3;
+  padding: 10px 12px;
+  min-height: 44px;     /* タップしやすい高さ */
+  box-sizing: border-box;
+}
+
+.mobile-mode button {
+  font-size: 16px;
+  padding: 12px 16px;
+  min-height: 44px;
+  width: 100%;
+}
+
+.mobile-mode #message { font-size: 14px; }
+.mobile-mode .register-link { font-size: 14px; }
+</style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="login-container">
+      <h2>経済ジャーナルデジタル<br>ログイン</h2>
+      <input type="text" id="email" placeholder="登録メールアドレス" required><br>
+      <input type="password" id="password" placeholder="パスワード" required><br>
+      <button onclick="doLogin()">ログイン</button>
+      <div id="message"></div>
+      <a href="register.html" class="register-link">新規登録はこちら</a> 
+    </div>
+  </div>
+
+  <script>
+    // --- 2. Firebase設定を貼り付ける ---
+    // Firebase Consoleのプロジェクト設定から取得した設定をここに貼り付けます。
+    const firebaseConfig = {
+      apiKey: "AIzaSyAJT3EnF4s6kfU6RuC9nJvOrs9FtG_RMR0",              // ⬅️ あなたのAPIキー
+      authDomain: "economic-journals-digital.firebaseapp.com",      // ⬅️ あなたの認証ドメイン
+      projectId: "economic-journals-digital",        // ⬅️ あなたのプロジェクトID
+      storageBucket: "economic-journals-digital.firebasestorage.app",
+      messagingSenderId: "1032175762907",
+      appId: "G-R2P1T1QR7X"
+    };
+
+    // Firebaseの初期化
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    // 認証成功後のリダイレクト先 (例: 会員専用ページ)
+    const REDIRECT_URL = 'index.html'; 
+
+    window.addEventListener('DOMContentLoaded', () => {
+        // (スマホ表示切り替え処理はそのまま残しました)
+        const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+
+        if (isMobile) {
+            document.body.classList.add('mobile-mode');
+        }
+    });
+
+    // --- 3. ログイン処理をFirebaseに置き換え ---
+    function doLogin() {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const messageDiv = document.getElementById('message');
+        const loginButton = document.querySelector('button');
+
+        // 入力値の簡易チェック
+        if (!email || !password) {
+            messageDiv.textContent = "メールアドレスとパスワードを入力してください。";
+            messageDiv.style.color = 'red';
+            return;
+        }
+
+        // メッセージとボタンの状態を更新
+        messageDiv.textContent = 'ログイン処理を実行中...';
+        messageDiv.style.color = '#007bff';
+        loginButton.disabled = true;
+
+        // Firebaseの認証関数を実行
+        auth.signInWithEmailAndPassword(email, password)
+            .then((userCredential) => {
+                // ログイン成功
+                messageDiv.textContent = 'ログイン成功！リダイレクトします...';
+                messageDiv.style.color = 'green';
+                // 会員専用ページへリダイレクト
+                window.location.href = REDIRECT_URL; 
+            })
+            .catch((error) => {
+                // ログイン失敗
+                let errorMessage = '認証に失敗しました。メールアドレスまたはパスワードを確認してください。';
+                
+                // エラーコードに応じてメッセージを詳細化
+                if (error.code === 'auth/user-not-found') {
+                    errorMessage = '登録されていないメールアドレスです。';
+                } else if (error.code === 'auth/wrong-password') {
+                    errorMessage = 'パスワードが間違っています。';
+                }
+
+                messageDiv.textContent = errorMessage;
+                messageDiv.style.color = 'red';
+                loginButton.disabled = false;
+            });
+    }
+  </script>
+</body>
+</html>

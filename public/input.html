@@ -1,0 +1,2022 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>記事入力・編集フォーム</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Quill Editor CSS -->
+  <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.7/dist/purify.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/minisearch@6.3.0/dist/umd/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/takuyaa/tiny-segmenter/TinySegmenter.js"></script>
+  <style>
+    /* Interフォントを使用（Tailwindデフォルト） */
+    body { font-family: 'Inter', sans-serif; }
+    
+    /* Quillエディタのスタイルを修正 */
+    #quillEditor-container {
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      min-height: 500px; /* 固定高さを最小高さに変更 */
+      overflow-y: hidden;
+      display: flex;
+      flex-direction: column;
+      background-color: white;
+    }
+    .ql-toolbar.ql-snow {
+      border: none;
+      border-bottom: 1px solid #ddd;
+      flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      background-color: #fff;
+      z-index: 10;
+    }
+    .ql-container.ql-snow {
+      border: none;
+      flex-grow: 1;
+      overflow-y: auto;
+    }
+   .ql-editor {
+  min-height: 440px;
+  font-size: 16px;
+  line-height: 1.7;
+  white-space: pre-wrap;      /* fallback */
+  white-space: break-spaces;  /* 連続/行末スペースも保持 */
+}
+/* ← これを追加（inheritで取りこぼし防止） */
+.ql-editor * {
+  white-space: inherit;
+}
+
+
+    .form-group.checkbox-group > div {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    /* プレビュー表示用のスタイル */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.7);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      box-sizing: border-box;
+      overflow-y: auto;
+    }
+
+    #previewContent-container {
+      background-color: #fff;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      width: 100%;
+      max-width: 800px;
+      margin: auto;
+      position: relative;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .close-button {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      font-size: 30px;
+      font-weight: bold;
+      color: #aaa;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .close-button:hover {
+      color: #555;
+    }
+    #previewTitle {
+      font-size: 28px;
+      font-weight: bold;
+      margin-bottom: 5px;
+      color: #333;
+      text-align: center;
+    }
+    .preview-subtitle {
+      font-size: 20px;
+      font-weight: 500;
+      color: #666;
+      margin: 0;
+      text-align: center;
+    }
+    #previewContent {
+      margin-top: 20px;
+      line-height: 1.7;
+      padding-top: 20px;
+      border-top: 1px solid #eee;
+    }
+    #previewContent img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: 20px auto;
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    #previewContent p {
+      margin-bottom: 1em;
+    }
+
+
+    /* モーダルウィンドウのスタイル */
+    .modal-content {
+      background-color: #fff;
+      padding: 25px;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      width: 90%;
+      max-width: 500px;
+    }
+    #multipleCategoryModal .modal-content {
+      max-width: 600px;
+    }
+    #categoryListUl {
+      max-height: 200px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      margin-bottom: 15px;
+    }
+    #categoryListUl li {
+      padding: 8px 10px;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+/* カテゴリ選択エリアを無効化したときの見た目 */
+#category-selection-window.is-disabled {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+/* Quill のプレースホルダー（打ち始めると消える薄グレー） */
+.ql-editor.ql-blank::before {
+  color: #9CA3AF;  /* Tailwindのgray-400 相当 */
+  opacity: 1;
+}
+
+
+  </style>
+</head>
+<body class="bg-gray-100 p-4 min-h-screen flex justify-center items-start">
+  <div class="form-container bg-white p-6 rounded-xl shadow-2xl w-full max-w-4xl mx-auto my-8">
+    <h2 class="text-3xl font-extrabold text-center text-gray-800 mb-6 border-b-2 pb-2">記事入力・編集フォーム</h2>
+    <div class="text-sm text-gray-500 mb-4 text-right">ユーザーID (匿名): <span id="currentUserId">認証中...</span></div>
+
+    <!-- GitHub トークン入力欄（このブラウザに保存） -->
+    <div class="form-group mb-4 border rounded-lg p-3 bg-gray-50">
+      <label class="block font-semibold text-gray-700 mb-1">
+        GitHub トークン（PAT）<span class="text-xs text-gray-500 ml-1">※このブラウザだけに保存されます</span>
+      </label>
+      <div class="flex gap-2">
+        <input
+          type="password"
+          id="githubTokenInput"
+          placeholder="ghp_ から始まる Personal Access Token"
+          class="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:outline-none bg-white shadow-sm"
+        >
+        <button
+          type="button"
+          onclick="window.saveGithubToken()"
+          class="px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg shadow hover:bg-indigo-700 transition"
+        >
+          保存
+        </button>
+      </div>
+      <p class="text-xs text-gray-500 mt-1">
+        ※ ソースコードには保存せず、ブラウザの localStorage（<code>kjd_github_pat</code>）にのみ保存します。
+      </p>
+    </div>
+
+
+<div class="form-group mb-4">
+  <label class="block font-semibold text-gray-700 mb-1">
+    ローカル JSON から読み込み（再編集用）
+  </label>
+  <input
+    type="file"
+    id="loadJsonFile"
+    accept=".json"
+    class="w-full p-3 border border-gray-300 rounded-lg focus:ring-4 focus:ring-blue-200 focus:outline-none transition bg-white shadow-sm"
+  >
+</div>
+
+    <div class="form-group mb-4">
+      <label for="articleIdList" class="block font-semibold text-gray-700 mb-1">登録済み記事の読み込み</label>
+      <select id="articleIdList" onchange="window.loadArticleForEdit(this.value)" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-4 focus:ring-blue-200 focus:outline-none transition bg-white shadow-sm">
+        <option value="">-- 記事を選択してください --</option>
+      </select>
+    </div>
+
+    <div class="form-group flex flex-col sm:flex-row gap-4 mb-4">
+      <div class="flex-1">
+        <label for="issue" class="block font-semibold text-gray-700 mb-1">号数 <span class="text-red-500">*</span></label>
+        <input type="text" id="issue" placeholder="例: 0001 または '新着記事'" maxlength="10" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-4 focus:ring-blue-200 focus:outline-none transition shadow-sm">
+      <div class="flex items-center gap-2 mt-2">
+  <input type="checkbox" id="isNewArticle" class="rounded text-blue-600 border-gray-300 focus:ring-blue-500 h-5 w-5">
+  <label for="isNewArticle" class="text-gray-700 font-medium select-none">新着記事</label>
+</div></div>
+      <div class="flex-1">
+        <label for="sequence" class="block font-semibold text-gray-700 mb-1">掲載順 <span class="text-red-500">*</span></label>
+        <input type="text" id="sequence" placeholder="例: 01" pattern="[0-9]{1,2}" maxlength="2" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-4 focus:ring-blue-200 focus:outline-none transition shadow-sm">
+      </div>
+      <div class="flex-1">
+        <label for="publishDate" class="block font-semibold text-gray-700 mb-1">発行年月日 <span class="text-red-500">*</span></label>
+        <input type="date" id="publishDate" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-4 focus:ring-blue-200 focus:outline-none transition shadow-sm">
+      </div>
+    </div>
+    
+    <div class="form-group mb-4">
+      <label for="titleAndSubtitles" class="block font-semibold text-gray-700 mb-1">記事見出し / サブタイトル1 / サブタイトル2 <span class="text-red-500">*</span></label>
+      <textarea id="titleAndSubtitles" placeholder="1行目: 記事見出し（発行中止記事の場合は中止理由）&#10;2行目: サブタイトル1&#10;3行目: サブタイトル2　　【任意に改行したい場合は<br>か\nを入れる】" class="w-full p-3 border border-gray-300 rounded-lg h-24 resize-y focus:ring-4 focus:ring-blue-200 focus:outline-none transition shadow-sm"></textarea>
+    </div>
+    
+    <div class="form-group flex flex-col sm:flex-row gap-4 mb-4">
+      <div class="flex-1 relative">
+        <label class="block font-semibold text-gray-700 mb-1">カテゴリ</label>
+        <div class="flex gap-2">
+          <div id="category-selection-window" onclick="window.openMultiCategoryModal()" class="flex-1 p-3 border border-gray-300 rounded-lg bg-white cursor-pointer min-h-12 transition hover:border-blue-400 shadow-sm flex flex-wrap items-center">
+            <div id="selected-categories-display" class="text-gray-500 text-sm">-- カテゴリを選択してください --</div>
+          </div>
+          <button onclick="window.openCategoryModal()" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition shadow-md whitespace-nowrap">カテゴリ管理</button>
+        </div>
+      </div>
+      <div class="flex-1">
+        <label for="keywords" class="block font-semibold text-gray-700 mb-1">キーワード (カンマ区切り)</label>
+        <input
+  type="text"
+  id="keywords"
+  placeholder="キーワードをカンマ区切りで入力"
+  class="w-full p-3 border border-gray-300 rounded-lg focus:ring-4 focus:ring-blue-200 focus:outline-none transition shadow-sm"
+  autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" name="kws"
+/>
+
+      </div>
+    </div>
+    
+    <div class="form-group mb-4">
+      <label for="quillEditor" class="block font-semibold text-gray-700 mb-1">記事本文</label>
+      <div id="quillEditor-container" class="shadow-md">
+        <div id="quillEditor"></div>
+      </div>
+    </div>
+    
+    <div class="form-group checkbox-group flex justify-end gap-6 mt-4 pr-2">
+  <div>
+    <input type="checkbox" id="例外表示" class="rounded text-blue-600 border-gray-300 focus:ring-blue-500 h-5 w-5">
+    <label for="例外表示" class="text-gray-700 font-medium select-none">例外表示 (必須項目チェックをスキップ)</label>
+  </div>
+  <div>
+    <input type="checkbox" id="非表示" class="rounded text-blue-600 border-gray-300 focus:ring-blue-500 h-5 w-5">
+    <label for="非表示" class="text-gray-700 font-medium select-none">非表示 (公開サイトに表示しない)</label>
+  </div>
+</div>
+    <div id="message" aria-live="polite" class="text-center text-blue-600 my-2 min-h-6 font-medium"></div>
+
+    <div class="button-group flex gap-4 mt-6">
+      <button id="saveButton" onclick="window.saveArticle()" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition shadow-lg hover:shadow-xl disabled:bg-gray-400 disabled:cursor-not-allowed">記事を登録</button>
+      <button id="updateButton" onclick="window.updateArticle()" disabled class="flex-1 bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition shadow-lg hover:shadow-xl disabled:bg-gray-400 disabled:cursor-not-allowed">記事を更新</button>
+      <button onclick="window.previewArticle()" class="flex-1 bg-gray-500 text-white font-bold py-3 rounded-lg hover:bg-gray-600 transition shadow-lg hover:shadow-xl">プレビュー</button>
+      <button onclick="window.clearForm()" class="flex-1 bg-red-500 text-white font-bold py-3 rounded-lg hover:bg-red-600 transition shadow-lg hover:shadow-xl">クリア</button>
+    </div>
+  </div>
+
+  <!-- カテゴリ管理モーダル -->
+  <div id="categoryModal" class="modal-overlay">
+    <div class="modal-content">
+      <h3 class="text-2xl font-bold mb-4">カテゴリ管理</h3>
+      <div class="flex mb-4">
+        <input type="text" id="newCategoryName" placeholder="新しいカテゴリ名" class="flex-grow p-2 border border-gray-300 rounded-l-lg focus:outline-none">
+        <button onclick="window.addCategory()" class="px-4 py-2 bg-blue-500 text-white rounded-r-lg hover:bg-blue-600 transition">追加</button>
+      </div>
+      <ul id="categoryListUl" class="mb-4">
+        <!-- カテゴリリストがここに挿入されます -->
+      </ul>
+      <button onclick="window.closeCategoryModal()" class="w-full py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition">閉じる</button>
+    </div>
+  </div>
+
+  <!-- 複数カテゴリ選択モーダル -->
+  <div id="multipleCategoryModal" class="modal-overlay">
+    <div class="modal-content">
+      <h3 class="text-2xl font-bold mb-4">カテゴリ選択</h3>
+      <div id="multiCategoryCheckboxes" class="max-h-64 overflow-y-auto border p-3 rounded-lg grid grid-cols-2 gap-2">
+        <!-- 複数カテゴリのチェックボックスがここに挿入されます -->
+      </div>
+      <div class="mt-4 flex justify-end">
+        <button onclick="window.applyMultiCategories()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition mr-2">適用</button>
+        <button onclick="window.closeMultiCategoryModal()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition">キャンセル</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- プレビューモーダル -->
+  <div id="previewArea" class="modal-overlay">
+    <div id="previewContent-container">
+      <span class="close-button" onclick="window.closePreview()">×</span>
+      <h1 id="previewTitle"></h1>
+      <p id="previewSubtitles" class="preview-subtitle"></p>
+      <div id="previewContent" class="ql-editor article-content"></div>
+      <div class="text-center mt-6">
+        <button onclick="window.closePreview()" class="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quill JS CDN -->
+  <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+
+  <!-- 記事入力ロジック（BIN 暗号化 + フォーム処理 + GitHub連携） -->
+  <script type="module">
+
+
+
+  // ★ここに Cloudflare Worker 側と共有する 32byte キーを Base64 で入れる
+  //   → まだ決めていない間はこのダミーで OK（この場合 BIN 生成はスキップされ JSON のみ）
+  const ENC_KEY_B64 = "MGU8z/MaR3nxnRoFIlIbzKdcCQHk8hPDuOqPNNIfkCU=";
+  console.log("ENC_KEY_B64 =", ENC_KEY_B64);
+
+
+// ===== GitHub のファイル取得（GET） =====
+//   path: "_manifest.json" など
+async function githubGetFile(path, token) {
+  // パスを URL エンコード（/ はそのまま残す）
+  const encodedPath = encodeURIComponent(path).replace(/%2F/g, "/");
+  const url = `${GITHUB_API_BASE}/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${encodedPath}?ref=${encodeURIComponent(GITHUB_BRANCH)}`;
+
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json"
+    }
+  });
+
+  if (res.status === 404) {
+    // まだファイルが無いときは null 扱い
+    return null;
+  }
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`GitHub GET 失敗: ${res.status} ${res.statusText} ${txt}`);
+  }
+
+  return await res.json(); // { content, sha, ... } が返ってくる
+}
+
+
+// サーバー上の _manifest.json を GitHub から読み込む
+async function ensureManifestLoaded(force = false, token = undefined) {
+  if (!force && manifestFiles.length > 0) return;
+
+  try {
+    const file = await githubGetFile("_manifest.json", token);
+    if (!file) {
+      console.warn("[MANIFEST] _manifest.json がまだありません（新規）。");
+      manifestFiles = [];
+      manifestSha = null;
+      return;
+    }
+
+    const rawB64 = (file.content || "").replace(/\n/g, "");
+    const bin = atob(rawB64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const text = new TextDecoder().decode(bytes);
+
+    const obj = JSON.parse(text);
+    if (Array.isArray(obj.files)) {
+      manifestFiles = obj.files.map(f => ({ ...f }));
+      manifestSha   = file.sha || null;
+      console.log("[MANIFEST] GitHub からロード:", manifestFiles.length, "件");
+    } else {
+      console.warn("[MANIFEST] files 配列が無いので空として扱います。");
+      manifestFiles = [];
+      manifestSha   = file.sha || null;
+    }
+  } catch (e) {
+    console.error("[MANIFEST] 読み込みエラー:", e);
+    manifestFiles = [];
+    manifestSha   = null;
+  }
+}
+
+// 記事オブジェクトから manifest 用の1件分を作る
+function buildManifestEntryFromArticle(slug, article) {
+  return {
+    slug: slug,
+    title: article.title || "",
+    publishDate: article.publishDate || "",
+    categoryIds: Array.isArray(article.categoryIds) ? article.categoryIds.slice() : [],
+    // 公開サイト用のパス（Cloudflare/Hosting 側では /build_plain_articles/... に置く想定）
+    path: `/build_plain_articles/${encodeURIComponent(slug)}.json`,
+    isHidden: !!article.isHidden,
+    isNewArticle: !!article.isNewArticle
+  };
+}
+
+// manifestFiles → _manifest.json を GitHub に保存
+async function saveManifestToGitHub(token) {
+  const obj = { files: manifestFiles };
+  const text = JSON.stringify(obj, null, 2);
+  const res = await githubUpsertText("_manifest.json", text, token, "Update _manifest.json", manifestSha);
+  if (res && res.content && res.content.sha) {
+    manifestSha = res.content.sha;
+  }
+}
+
+// 1記事ぶんを manifestFiles に追加/更新 → _manifest.json を GitHub に保存
+async function updateManifestForArticle(slug, article, token) {
+  // 🔸 毎回 GitHub の最新 _manifest.json を読んでから処理
+  //    forceReload = true にして、他の人の編集ともズレにくくする
+  await ensureManifestLoaded(true, token);
+
+  const entry = buildManifestEntryFromArticle(slug, article);
+
+  // slug / articleId / id のどれかが一致すれば同じ記事とみなす
+  const key = String(slug);
+  const idx = manifestFiles.findIndex(f => {
+    const s = String(f.slug || "");
+    const a = String(f.articleId || "");
+    const i = String(f.id || "");
+    return s === key || a === key || i === key;
+  });
+
+  if (idx >= 0) {
+    manifestFiles[idx] = entry;
+    console.log("[MANIFEST] 更新:", slug);
+  } else {
+    manifestFiles.push(entry);
+    console.log("[MANIFEST] 追加:", slug);
+  }
+
+  await saveManifestToGitHub(token);
+}
+
+
+// manifestFiles を JSON テキスト化
+function getManifestJsonText() {
+  const obj = { files: manifestFiles };
+  return JSON.stringify(obj, null, 2);
+}
+
+  // ======== Base64 共通ユーティリティ ========
+
+  // Base64 → Uint8Array
+  function base64ToBytes(b64) {
+    const bin = atob(b64);
+    const len = bin.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+
+  // Uint8Array → Base64
+  function bytesToBase64(bytes) {
+    let s = "";
+    for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return btoa(s);
+  }
+
+
+  // ======== GitHub 連携設定 & トークン管理 ========
+
+  const GITHUB_OWNER  = "keizaij";   // ★ここに GitHub のユーザー/組織名
+  const GITHUB_REPO   = "kjdweb-data";      // ★ここに リポジトリ名
+  const GITHUB_BRANCH = "main";                // ★使用ブランチ
+  const GITHUB_API_BASE = "https://api.github.com";
+  const GITHUB_BASE_PATH = "";                      // ルート直下に保存するなら空
+  const GITHUB_TOKEN_STORAGE_KEY = "kjd_github_pat";
+
+  // ★全文検索用の元データを置くパス
+  const SEARCH_SOURCE_PATH = "build_plain_articles/_search_source.json";
+
+
+// >>> ここに追加 <<<
+let manifestFiles = [];
+let manifestSha   = null;
+
+  // 画面のトークン入力を localStorage に保存
+  window.saveGithubToken = function() {
+    const input = document.getElementById("githubTokenInput");
+    if (!input) return;
+    const token = input.value.trim();
+    if (!token) {
+      alert("GitHub トークンを入力してください。");
+      return;
+    }
+    localStorage.setItem(GITHUB_TOKEN_STORAGE_KEY, token);
+    alert("GitHub トークンを保存しました（このブラウザのみ有効）");
+    input.value = "";
+  // ★ トークン保存後に記事一覧も更新
+  refreshArticleIdList();
+  };
+
+  // 保存されたトークンを取得
+  function getGithubToken() {
+    const token = localStorage.getItem(GITHUB_TOKEN_STORAGE_KEY);
+    if (!token) {
+      throw new Error("GitHub トークンが設定されていません。画面上部で保存してください。");
+    }
+    return token;
+  }
+
+  // テキスト → Base64
+  function textToBase64(text) {
+    const enc = new TextEncoder();
+    const bytes = enc.encode(text);
+    return bytesToBase64(bytes);
+  }
+
+  // GitHub にファイルを 1 つ PUT（create/update）
+  async function githubPutFile(token, path, base64Content, message) {
+    if (!GITHUB_OWNER || !GITHUB_REPO) {
+      throw new Error("GITHUB_OWNER / GITHUB_REPO をスクリプト内で設定してください。");
+    }
+
+    // パスを URL エンコード（/ は残す）
+    const encodedPath = encodeURIComponent(path).replace(/%2F/g, "/");
+    const url = `${GITHUB_API_BASE}/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${encodedPath}`;
+
+    // 既存ファイルの sha を取る（なければ 404）
+    let sha = undefined;
+    const getRes = await fetch(`${url}?ref=${encodeURIComponent(GITHUB_BRANCH)}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json"
+      }
+    });
+    if (getRes.ok) {
+      const info = await getRes.json();
+      sha = info.sha;
+    } else if (getRes.status !== 404) {
+      const txt = await getRes.text();
+      throw new Error(`GitHub 取得エラー (${getRes.status}): ${txt}`);
+    }
+
+    const body = {
+      message,
+      content: base64Content,
+      branch: GITHUB_BRANCH
+    };
+    if (sha) body.sha = sha;
+
+    const putRes = await fetch(url, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!putRes.ok) {
+      const txt = await putRes.text();
+      throw new Error(`GitHub 更新エラー (${putRes.status}): ${txt}`);
+    }
+    return putRes.json();
+  }
+
+// テキストファイル用の薄いラッパー（上の githubPutFile を利用）
+async function githubUpsertText(path, text, token, message, prevSha) {
+  // prevSha は今回の実装では使わない（無視してOK）
+  const base64 = textToBase64(text);
+  return githubPutFile(token, path, base64, message);
+}
+
+
+ 
+
+  // ======== BIN 暗号化 =========
+
+  // 暗号鍵を WebCrypto に import
+  let _encKeyPromise = null;
+  function getEncryptKey() {
+    if (!_encKeyPromise) {
+      _encKeyPromise = (async () => {
+        if (!ENC_KEY_B64 || ENC_KEY_B64 === "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=") {
+          throw new Error("ENC_KEY_B64 に実際の鍵(Base64)を設定してください");
+        }
+        const raw = base64ToBytes(ENC_KEY_B64);
+        if (raw.byteLength !== 32) {
+          throw new Error("暗号鍵は 32 バイト (AES-256) が必要です");
+        }
+        return crypto.subtle.importKey(
+          "raw",
+          raw,
+          { name: "AES-GCM" },
+          false,
+          ["encrypt"]
+        );
+      })();
+    }
+    return _encKeyPromise;
+  }
+
+  // JSON文字列を AES-GCM で暗号化して BIN テキストを返す
+  // 仕様: [IV(12B)][CT||TAG] を Base64 にして返す
+  // AAD: "slug:<slug>"
+  async function buildBinTextFromJson(slug, jsonText) {
+    const key = await getEncryptKey();
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encoder = new TextEncoder();
+
+    const aad = encoder.encode(`slug:${slug}`);
+    const pt  = encoder.encode(jsonText);
+
+    const ctBuf = await crypto.subtle.encrypt(
+      {
+        name: "AES-GCM",
+        iv,
+        additionalData: aad,
+        tagLength: 128
+      },
+      key,
+      pt
+    );
+    const ct = new Uint8Array(ctBuf);
+
+    // [IV][CT||TAG] を連結
+    const out = new Uint8Array(iv.length + ct.length);
+    out.set(iv, 0);
+    out.set(ct, iv.length);
+
+    return bytesToBase64(out); // ★ これを .bin の中身として保存
+  }
+
+  // テキストファイルダウンロード
+  function downloadTextFile(filename, text) {
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+
+// 記事オブジェクトから JSON / BIN テキストを生成する
+async function buildJsonAndBin(slug, article) {
+  const jsonObj = {
+    ...article,
+    _exportedAt: new Date().toISOString(),
+  };
+  const jsonText = JSON.stringify(jsonObj, null, 2);
+
+  let binText = null;
+  if (!ENC_KEY_B64 || ENC_KEY_B64 === "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=") {
+    console.warn("[BIN] 生成をスキップします: ENC_KEY_B64 に実際の鍵(Base64)を設定してください");
+  } else {
+    binText = await buildBinTextFromJson(slug, jsonText);
+  }
+
+  return { jsonText, binText };
+}
+
+
+
+
+  // ===============================
+  // 0. グローバル変数
+  // ===============================
+  let quill;
+  let selectedCategoryIds = [];
+  let currentArticleId = null;        // いま編集している記事ID（215301 とか NEW-...）
+  let currentArticleCreatedAt = null; // createdAt を保持しておく
+
+
+  // ===============================
+  // 0-1. デフォルトカテゴリ一覧
+  //   id  : 記事JSONに入っているランダム英数字
+  //   name: 画面に出したい日本語名
+  //   order: 表示順（後で並び替えたいときに番号を変えればOK）
+  // ===============================
+  const DEFAULT_CATEGORIES = [
+    { id: "08jGjZRtfwpJNYhQsSWZ", name: "自動車関連",           order:  1 },
+    { id: "2a3wuMt8Tqbor2L9sVWT", name: "小売関連",             order:  2 },
+    { id: "3Jnka8JGNSgSi66Py6zV", name: "競売・入札関連",       order:  3 },
+    { id: "6CdvcxXCUWrstur5S0v9", name: "水産関連",             order:  4 },
+    { id: "ClD3hHhAXX7TUqRQXi46", name: "食品関連",             order:  5 },
+    { id: "EBFYEqC4TojaJJ30FGXz", name: "休業・撤退関連",       order:  6 },
+    { id: "GzRRfI71G0BqPjtSAxS2", name: "新築・改装・移転関連", order:  7 },
+    { id: "S6ASodsOgpYDTatprCtj", name: "金融機関関連",         order:  8 },
+    { id: "SNAkWpUGVGoqZ3YWFdoa", name: "合併・譲渡関連",       order:  9 },
+    { id: "TAiWAvEryLMTfuhmCHVG", name: "倒産・解散関連",       order: 10 },
+    { id: "WYYSfTyL2iTtlNhtChdy", name: "建築関連",             order: 11 },
+    { id: "XjjwdESm9TaSb754kVWF", name: "新設・進出関連",       order: 12 },
+    { id: "eFpNNhhm3RaYBiqnHeC7", name: "不動産関連",           order: 13 },
+    { id: "ntQlhvtZnywquyljKJXK", name: "運送関連",             order: 14 },
+    { id: "qU1Lc6K9RZzDOzgY8RmF", name: "決算・金融商品関連",   order: 15 },
+    { id: "yiRqmTmfAsgFtktyxjNn", name: "体制変更関連",         order: 16 },
+  ];
+
+  // ===============================
+  // 1. Quill 初期化 & 画面初期化
+  // ===============================
+  window.addEventListener('load', () => {
+    initQuill();
+    initFormLocks();
+    loadCategoriesFromLocal();
+    setupJsonImport();
+    setupNewArticleCheckbox();
+    setMessage('新規記事の入力モードです。');
+  // ★ GitHub トークンが設定済みなら、登録済み記事一覧を読み込む
+  refreshArticleIdList();
+  });
+
+  function initQuill() {
+    const el = document.getElementById('quillEditor');
+    if (!el) return;
+
+    quill = new Quill('#quillEditor', {
+      theme: 'snow',
+      placeholder: '記事本文をここに入力...',
+      modules: {
+        toolbar: [
+          [{ header: [1, 2, 3, false] }],
+          ['bold', 'italic', 'underline', 'strike'],
+          [{ list: 'ordered' }, { list: 'bullet' }],
+          [{ indent: '-1' }, { indent: '+1' }],
+          [{ align: [] }],
+          ['link', 'image'],
+          ['clean']
+        ]
+      }
+    });
+
+    // Quill 初期化直後に「社内リンク」ボタンだけは残す
+    const tb = document.querySelector('.ql-toolbar');
+    if (tb) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ql-internal';
+      btn.textContent = '社内リンク';
+      btn.title = '選択テキストを社内記事リンク化';
+      btn.addEventListener('click', () => {
+        alert('いまはローカル専用モードなので「社内リンク」はまだ未実装です。後で静的サイト側に合わせて追加しましょう。');
+      });
+      tb.appendChild(btn);
+    }
+  }
+
+  function setMessage(msg, isError = false) {
+    const m = document.getElementById('message');
+    if (!m) return;
+    m.textContent = msg;
+    m.classList.toggle('text-blue-600', !isError);
+    m.classList.toggle('text-red-600', isError);
+  }
+
+  // ===============================
+  // 2. フォームロック系（新着/例外/非表示）
+  // ===============================
+  function setDisabledAttr(idOrEl, disabled) {
+    const el = typeof idOrEl === 'string'
+      ? document.getElementById(idOrEl)
+      : idOrEl;
+    if (!el) return;
+    el.disabled = disabled;
+    el.classList.toggle('bg-gray-100', disabled);
+    el.classList.toggle('cursor-not-allowed', disabled);
+  }
+
+  function toggleCategoryUI(disabled) {
+    const area = document.getElementById('category-selection-window');
+    const btn  = document.querySelector('button[onclick="window.openCategoryModal()"]');
+    if (area) area.classList.toggle('is-disabled', disabled);
+    if (btn)  btn.disabled = disabled;
+  }
+
+  function toggleQuillEnabled(enabled) {
+    if (!quill) return;
+    quill.enable(enabled);
+    quill.root.classList.toggle('bg-gray-100', !enabled);
+    quill.root.classList.toggle('cursor-not-allowed', !enabled);
+  }
+
+  function toggleNewArticleUI(checked) {
+    const issueEl = document.getElementById('issue');
+    if (!issueEl) return;
+    if (checked) {
+      issueEl.value = '';
+      issueEl.disabled = true;
+      issueEl.classList.add('bg-gray-100', 'cursor-not-allowed');
+      issueEl.placeholder = '（新着のため空欄でOK）';
+    } else {
+      issueEl.disabled = false;
+      issueEl.classList.remove('bg-gray-100', 'cursor-not-allowed');
+      issueEl.placeholder = '例: 0001';
+    }
+  }
+
+  function applyFormLocks() {
+    const isNew = document.getElementById('isNewArticle').checked;
+    const isEx  = document.getElementById('例外表示').checked;
+
+    // 号数：新着のとき入力不可
+    setDisabledAttr('issue', isNew);
+
+    // 掲載順：新着 or 例外 のとき入力不可
+    const seqDisabled = isNew || isEx;
+    setDisabledAttr('sequence', seqDisabled);
+    if (seqDisabled) {
+      const seqEl = document.getElementById('sequence');
+      if (seqEl) seqEl.value = '';
+    }
+
+    // カテゴリ＆キーワード：新着 or 例外 のとき操作不可
+    const metaDisabled = isNew || isEx;
+    toggleCategoryUI(metaDisabled);
+    setDisabledAttr('keywords', metaDisabled);
+    if (metaDisabled) {
+      const kwEl = document.getElementById('keywords');
+      if (kwEl) kwEl.value = '';
+    }
+
+    // 本文：例外のときのみ読み取り専用
+    toggleQuillEnabled(!isEx);
+  }
+
+  function initFormLocks() {
+    const isNewCb = document.getElementById('isNewArticle');
+    const exceptionalCb = document.getElementById('例外表示');
+
+    if (isNewCb) {
+      isNewCb.addEventListener('change', (e) => {
+        toggleNewArticleUI(e.target.checked);
+        applyFormLocks();
+      });
+    }
+    if (exceptionalCb) {
+      exceptionalCb.addEventListener('change', () => applyFormLocks());
+    }
+
+    applyFormLocks();
+  }
+
+  function setupNewArticleCheckbox() {
+    const isNewCb = document.getElementById('isNewArticle');
+    if (!isNewCb) return;
+    // 初期状態は「通常記事」として扱う
+    isNewCb.checked = false;
+    toggleNewArticleUI(false);
+    applyFormLocks();
+  }
+
+  // ===============================
+  // 3. Quill HTML → 保存用 HTML
+  // ===============================
+  const ARTICLE_STYLE = `<style>
+    .ql-align-center{text-align:center;}
+    .ql-align-right{text-align:right;}
+    .ql-align-justify{text-align:justify;}
+    .ql-font-serif{font-family:serif;}
+    .ql-font-monospace{font-family:monospace;}
+    .ql-size-small{font-size:0.75em;}
+    .ql-size-large{font-size:1.5em;}
+    .ql-size-huge{font-size:2.5em;}
+    .article-content{
+      white-space: pre-wrap;
+      white-space: break-spaces;
+    }
+    .article-content img{
+      max-width:100%;
+      height:auto;
+      display:block;
+      margin:10px auto;
+    }
+  </style>`;
+
+  // ★ Quillから出てきた HTML 内の data:image を /photo/... に差し替えつつ、
+  //   画像ファイルを GitHub にアップするための base64 一覧を返す
+  function processInlineImages(issue, slug, html) {
+    if (!html || typeof html !== "string") {
+      return { html: html || "", imageFiles: [] };
+    }
+
+    // 元HTML先頭にある <style> を保持しておく
+    const styleMatch = html.match(/^\s*<style[\s\S]*?<\/style>/i);
+    const stylePart = styleMatch ? styleMatch[0] : "";
+    const htmlWithoutStyle = styleMatch ? html.replace(styleMatch[0], "") : html;
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlWithoutStyle, "text/html");
+    const body = doc.body;
+
+    const imgs = Array.from(body.querySelectorAll("img"));
+    const files = [];
+    let index = 1;
+
+    const issueFolderRaw = (issue || "").trim();
+    const issueFolder = issueFolderRaw
+      ? (issueFolderRaw.replace(/[^\dA-Za-z_-]/g, "") || issueFolderRaw)
+      : slug; // 新着など号数なしの場合は slug フォルダに
+
+    imgs.forEach(img => {
+      const src = img.getAttribute("src") || "";
+      if (!src.startsWith("data:image/")) return;
+
+      const m = src.match(/^data:image\/(png|jpe?g|gif);base64,(.+)$/i);
+      if (!m) return;
+
+      const ext = (m[1].toLowerCase() === "jpeg") ? "jpg" : m[1].toLowerCase();
+      const b64 = m[2];
+
+      const numStr   = String(index).padStart(2, "0");
+      const fileName = `${slug}-${numStr}.${ext}`;
+      const repoPath = `photo/${issueFolder}/${fileName}`;
+      const urlPath  = `/photo/${issueFolder}/${fileName}`;
+
+      // HTML側は /photo/... に差し替え
+      img.setAttribute("src", urlPath);
+
+      files.push({
+        path: repoPath,
+        contentBase64: b64,
+      });
+
+      index++;
+    });
+
+    const bodyHtml = body.innerHTML;
+    const finalHtml = stylePart + bodyHtml;
+
+    return {
+      html: finalHtml,
+      imageFiles: files,
+    };
+  }
+
+  function normalizeLeadingSpacesInBlocks(html) {
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = html;
+
+    const blocks = wrapper.querySelectorAll('p, li, h1, h2, h3, h4, h5, h6, blockquote');
+    blocks.forEach(block => {
+      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, null);
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        if (!node.nodeValue) continue;
+
+        const v = node.nodeValue;
+        const zwPrefix = (v.match(/^[\u200B\uFEFF]*/)||[''])[0];
+        const rest = v.slice(zwPrefix.length);
+
+        const m = rest.match(/^[ \u3000]+/);
+        if (m) {
+          const converted = rest.replace(/^[ \u3000]+/, s =>
+            s.replace(/ /g, '\u00A0')
+             .replace(/\u3000/g, '\u3000')
+          );
+          node.nodeValue = converted;
+          break;
+        }
+        if (rest.length > 0) break;
+      }
+    });
+
+    return wrapper.innerHTML;
+  }
+
+  function buildHtmlFromQuill() {
+    if (!quill) return '';
+    let raw = quill.root.innerHTML.replace(/\u200B|\uFEFF/g, '');
+    const normalized = normalizeLeadingSpacesInBlocks(raw);
+    const safeBody = DOMPurify.sanitize(normalized);
+    const entityBody = safeBody
+      .replace(/\u00A0/g, '&nbsp;')
+      .replace(/\u3000/g, '&#12288;');
+
+    return `${ARTICLE_STYLE}<div class="article-content">${entityBody}</div>`;
+  }
+
+// htmlContent 内の <img src="data:image/..."> を
+//   /photo/{basePrefix}/{basePrefix-01.png} 形式に変えつつ
+//   dataURL の配列も返す
+function processImagesInHtml(htmlContent, issueNumOrNull, slug) {
+  const tmp = document.createElement("div");
+  tmp.innerHTML = htmlContent;
+
+  const body = tmp.querySelector(".article-content") || tmp;
+  const imgs = body.querySelectorAll("img");
+
+  // 号数が取れれば "2168" のような 4桁、それ以外は slug を使う
+  let basePrefix;
+  if (issueNumOrNull != null) {
+    const n = Number(issueNumOrNull) || 0;
+    basePrefix = String(n).padStart(4, "0");
+  } else {
+    basePrefix = String(slug);
+  }
+
+  const imageInfos = [];
+  let idx = 0;
+
+  imgs.forEach(img => {
+    const src = img.getAttribute("src") || "";
+    if (!src.startsWith("data:image/")) return;
+
+    idx++;
+    const m = src.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,/);
+    let ext = (m && m[1] || "png").toLowerCase();
+    if (ext === "jpeg" || ext === "pjpeg") ext = "jpg";
+
+    const fileName = `${basePrefix}-${String(idx).padStart(2, "0")}.${ext}`;
+    const uriPath  = `/photo/${basePrefix}/${fileName}`;
+
+    imageInfos.push({
+      basePrefix,
+      fileName,
+      uriPath,
+      dataUrl: src
+    });
+
+    img.setAttribute("src", uriPath);
+  });
+
+  return {
+    html: tmp.innerHTML,
+    images: imageInfos,
+    basePrefix
+  };
+}
+
+// dataURL から画像ファイルを GitHub に保存
+async function saveImagesToGitHub(images, token) {
+  for (const info of images) {
+    const { basePrefix, fileName, dataUrl } = info;
+    const path = `photo/${basePrefix}/${fileName}`; // レポジトリ上のパス
+
+    const base64Data = dataUrl.split(",")[1] || "";
+    if (!base64Data) continue;
+
+    await githubUpsertBase64(path, base64Data, token, `Update image ${path}`);
+    console.log("[GitHub] image saved:", path);
+  }
+}
+
+
+  // ★★ 画像の base64 を /photo/{号}/ファイル名 に差し替える処理 ★★
+  function processHtmlAndImages(issueRaw, slug, fullHtml) {
+    // issueRaw: "2168" など（なければ slug を使う）
+    const digits = String(issueRaw || '').replace(/\D/g, '');
+    const issueFolder = digits || slug;
+    const baseName    = digits || slug;
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(fullHtml, "text/html");
+
+    const imgs = Array.from(doc.querySelectorAll('img'));
+    const images = [];
+    let index = 1;
+
+    for (const img of imgs) {
+      const src = img.getAttribute('src') || '';
+      if (!src.startsWith('data:image/')) continue;
+
+      const m = src.match(/^data:image\/(png|jpe?g|gif);base64,(.+)$/i);
+      if (!m) continue;
+
+      let ext = m[1].toLowerCase();
+      if (ext === 'jpeg') ext = 'jpg';
+      const b64 = m[2];
+
+      const numStr = String(index).padStart(2, '0');
+      const fileName = `${baseName}-${numStr}.${ext}`;
+      const repoPath = `photo/${issueFolder}/${fileName}`;  // GitHub 上のパス
+      const publicPath = `/photo/${issueFolder}/${fileName}`; // 本番サイトでのパス
+
+      images.push({
+        path: repoPath,
+        contentB64: b64
+      });
+
+      img.setAttribute('src', publicPath);
+      index++;
+    }
+
+    // style は head に分離されるので、body 部分だけ取って再度 ARTICLE_STYLE を付け直す
+    const bodyHtml = doc.body.innerHTML || '';
+    const newHtml  = ARTICLE_STYLE + bodyHtml;
+
+    return { html: newHtml, images };
+  }
+
+  // タイトル/サブタイトル用：<br> or \n を改行に
+  function renderWithManualBreaks(raw) {
+    if (!raw) return '';
+    const escaped = raw
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    return escaped
+      .replace(/&lt;br\s*\/?&gt;/gi, '<br>')
+      .replace(/\\n/g, '<br>');
+  }
+
+  // ===============================
+  // 4. フォーム値 → 共通データオブジェクト
+  // ===============================
+  function getFormData() {
+    const titleAndSubtitles = document.getElementById('titleAndSubtitles').value.trim();
+    const [title, subtitle1, subtitle2] =
+      titleAndSubtitles.split(/\r?\n/).map(s => s.trim());
+
+    const isExceptional = document.getElementById('例外表示').checked;
+    const isNewArticle  = document.getElementById('isNewArticle').checked;
+    const isHiddenFlag  = document.getElementById('非表示').checked;
+
+    const issueValue        = document.getElementById('issue').value.trim();
+    const sequenceValue     = document.getElementById('sequence').value.trim();
+    const publishDateValue  = document.getElementById('publishDate').value.trim();
+    const publishDate = publishDateValue ? publishDateValue.replace(/-/g, '/') : '';
+
+    const finalIssue = isNewArticle ? '' : issueValue;
+
+    const issueNum    = !finalIssue
+      ? null
+      : (Number(finalIssue.replace(/[^\d.-]/g, '')) || null);
+    const sequenceNum = sequenceValue
+      ? (Number(sequenceValue.replace(/[^\d.-]/g, '')) || null)
+      : null;
+
+    // 必須チェック（例外表示のときはスキップ）
+    if (!isExceptional) {
+      if (!isNewArticle && !finalIssue) {
+        setMessage('号数は必須です。', true);
+        return null;
+      }
+      if (!isNewArticle && !sequenceValue) {
+        setMessage('掲載順は必須です。', true);
+        return null;
+      }
+      if (!publishDateValue) {
+        setMessage('発行年月日は必須です。', true);
+        return null;
+      }
+      if (!titleAndSubtitles) {
+        setMessage('記事見出し/サブタイトルは必須です。', true);
+        return null;
+      }
+    }
+
+    const htmlContent = buildHtmlFromQuill();
+
+    return {
+      issue: finalIssue,
+      sequence: sequenceValue,
+      issueNum,
+      sequenceNum,
+      publishDate,
+      title,
+      subtitle1: subtitle1 || '',
+      subtitle2: subtitle2 || '',
+      categoryIds: selectedCategoryIds.slice(),
+      keywords: document.getElementById('keywords').value
+        .split(',')
+        .map(k => k.trim())
+        .filter(Boolean),
+      htmlContent,
+      isNewArticle,
+      '例外表示': isExceptional,
+      '非表示': isHiddenFlag,
+      isHidden: isHiddenFlag
+    };
+  }
+
+  // ===============================
+  // 5. 記事ID（slug）生成
+  // ===============================
+  function randBase36(len = 6) {
+    let s = '';
+    while (s.length < len) s += Math.floor(Math.random() * 36).toString(36);
+    return s.slice(0, len);
+  }
+
+  function buildArticleDocId(data) {
+    if (data.isNewArticle) {
+      const ymd = (data.publishDate || new Date().toISOString().slice(0,10))
+        .replace(/[-/]/g, '');
+      return `NEW-${ymd}-${Date.now().toString(36)}-${randBase36(6)}`;
+    }
+    const issue = String(data.issue || '').replace(/\D/g, '').padStart(4, '0');
+    const seq   = String(data.sequence || '').replace(/\D/g, '').padStart(2, '0');
+    if (!issue.trim() || !seq.trim()) return null;
+    return `${issue}${seq}`;
+  }
+
+  // ===============================
+  // 6. JSON のダウンロード / 読み込み
+  // ===============================
+  function downloadJson(docId, obj) {
+    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${docId}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function setupJsonImport() {
+    const input = document.getElementById('loadJsonFile');
+    if (!input) return;
+
+  console.log("[setupJsonImport] listener を設定しました");
+
+    input.addEventListener('change', async (e) => {
+     console.log("[setupJsonImport] change イベント発火", e.target.files);
+
+
+     const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+      console.log("[setupJsonImport] JSON parse OK", data); // ← 追加
+
+
+        fillFormFromJson(data, file.name.replace(/\.json$/i, ''));
+        setMessage(`JSON から記事を読み込みました（${file.name}）。`);
+      } catch (err) {
+        console.error(err);
+        setMessage('JSON の読み込みに失敗しました。形式を確認してください。', true);
+      } finally {
+        // 同じファイルを続けて選べるように
+        e.target.value = '';
+      }
+    });
+  }
+
+  function fillFormFromJson(data, fallbackId) {
+    currentArticleId = data.slug || data.id || fallbackId || null;
+    currentArticleCreatedAt = data.createdAt || null;
+
+    // 新着
+    const isNew = !!data.isNewArticle;
+    const isEx  = !!(data['例外表示'] || data.exceptional);
+    const isHidden = !!(data.isHidden || data['非表示']);
+
+    const isNewCb = document.getElementById('isNewArticle');
+    const exCb    = document.getElementById('例外表示');
+    const hiddenCb= document.getElementById('非表示');
+
+    if (isNewCb) isNewCb.checked = isNew;
+    if (exCb)    exCb.checked    = isEx;
+    if (hiddenCb)hiddenCb.checked= isHidden;
+
+    toggleNewArticleUI(isNew);
+    applyFormLocks();
+
+    // 号数・掲載順・日付
+    const digits = String(data.issue || '').replace(/\D/g, '');
+    const issue  = digits ? digits.padStart(4, '0') : (data.issue || '');
+    document.getElementById('issue').value    = issue || '';
+    document.getElementById('sequence').value = data.sequence || '';
+
+    const rawDate   = data.publishDate || '';
+    const inputDate = rawDate.replace(/\//g, '-');
+    document.getElementById('publishDate').value = inputDate;
+
+    // 見出し/サブタイトル
+    const mergedTitle = [data.title, data.subtitle1, data.subtitle2]
+      .filter(s => s && String(s).trim() !== '')
+      .join('\n');
+    document.getElementById('titleAndSubtitles').value = mergedTitle;
+
+    // キーワード
+    const kwEl = document.getElementById('keywords');
+    if (kwEl) {
+      if (Array.isArray(data.keywords)) {
+        kwEl.value = data.keywords.join(', ');
+      } else {
+        kwEl.value = data.keywords || '';
+      }
+    }
+
+    // 本文（htmlContent）
+    if (typeof data.htmlContent === 'string' && data.htmlContent.trim()) {
+      let bodyOnly = data.htmlContent.replace(/^[\s\S]*?<\/style>/i, '');
+      bodyOnly = bodyOnly.replace(
+        /^\s*<div[^>]*class=["'][^"']*article-content[^"']*["'][^>]*>([\s\S]*?)<\/div>\s*$/i,
+        '$1'
+      );
+      const safe = DOMPurify.sanitize(bodyOnly);
+      // 実体を戻す
+      const decoded = safe
+        .replace(/&nbsp;/g, '\u00A0')
+        .replace(/&#160;/g, '\u00A0')
+        .replace(/&#xA0;/gi, '\u00A0')
+        .replace(/&#12288;/g, '\u3000')
+        .replace(/&#x3000;/gi, '\u3000');
+
+      if (quill) {
+        quill.root.innerHTML = decoded;
+        quill.setSelection(0, 0, 'silent');
+        quill.history.clear();
+      }
+    } else {
+      if (quill) quill.setText('');
+    }
+
+    // カテゴリ
+    selectedCategoryIds = Array.isArray(data.categoryIds) ? data.categoryIds.slice() : [];
+    updateCategoryDisplay();
+
+    // ボタン状態
+    const updateBtn = document.getElementById('updateButton');
+    const saveBtn   = document.getElementById('saveButton');
+    if (updateBtn) {
+      updateBtn.disabled = !currentArticleId;
+    }
+    if (saveBtn) {
+      saveBtn.disabled = false; // 新しいIDで再保存もできる
+    }
+  }
+
+
+// ===== 記事 1 本ぶんを JSON / BIN / 画像に展開して GitHub に保存 =====
+async function exportStaticFilesForArticle(slug, article, token) {
+  // 0) 号数と本文HTMLをここで決める（★ 新しく追加した部分）
+  //    ・画像保存パス用に「号数」の数字だけを取り出す
+  //    ・本文HTMLは htmlContent 優先、なければ body / content などから拾う
+  const issueRaw = article.issue || article.issueNumber || "";
+  const issueCode = String(issueRaw || "").replace(/\D/g, "") || "misc";
+
+  const fullHtml =
+    article.htmlContent ||  // ふだんはここに Quill のHTMLが入っている想定
+    article.bodyHtml ||
+    article.body ||
+    article.content ||
+    "";
+
+  // 1) htmlContent 内の data:image/... を /photo/... に差し替えつつ、
+  //    画像の base64 一覧を取得
+  const processed = processHtmlAndImages(issueCode, slug, fullHtml);
+  article.htmlContent = processed.html;   // JSON に入れる本文はこちら
+
+  // 2) JSON と BIN のテキストを作成
+  const { jsonText, binText } = await buildJsonAndBin(slug, article);
+
+  // 3) 記事 JSON を GitHub にアップ
+  const jsonB64 = textToBase64(jsonText);
+  await githubPutFile(
+    token,
+    `build_plain_articles/${slug}.json`,
+    jsonB64,
+    `Add/update article ${slug}`
+  );
+
+  // 4) BIN もあれば GitHub にアップ（鍵未設定なら binText は null）
+  if (binText) {
+    const binB64 = textToBase64(binText);
+    await githubPutFile(
+      token,
+      `protected_enc/${slug}.bin`,
+      binB64,
+      `Add/update bin ${slug}`
+    );
+  }
+
+  // 5) 画像を GitHub にアップ（/photo/...）
+  for (const img of processed.images) {
+    await githubPutFile(
+      token,
+      img.path,          // 例: "photo/2168/2168-01.png"
+      img.contentB64,    // data:image/... から切り出した base64 本体
+      `Add/update image for ${slug}: ${img.path}`
+    );
+  }
+}
+
+// ===============================
+// 登録済み記事一覧を GitHub から取得して <select> に反映
+// ===============================
+async function refreshArticleIdList() {
+  const select = document.getElementById("articleIdList");
+  if (!select) return;
+
+  // 一旦初期化
+  select.innerHTML = `<option value="">-- 記事を選択してください --</option>`;
+
+  let token;
+  try {
+    token = getGithubToken();   // ★ 小文字 getGithubToken（今使っている方）
+  } catch (e) {
+    console.warn("[articleList] GitHub トークン未設定のため一覧は読み込みません。");
+    return; // トークンが無い場合は何もしない
+  }
+
+  try {
+    // レポジトリ直下の _manifest.json を取得
+    const file = await githubGetFile("_manifest.json", token);
+    if (!file) {
+      console.warn("[articleList] _manifest.json がまだありません。");
+      return;
+    }
+
+    // Base64 → JSON
+    const rawB64 = (file.content || "").replace(/\n/g, "");
+    const bin = atob(rawB64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const text = new TextDecoder().decode(bytes);
+
+    const obj = JSON.parse(text);
+    const list = Array.isArray(obj.files) ? obj.files.slice() : [];
+
+    // 表示用に並び替え（発行日降順 → slug降順）
+    list.sort((a, b) => {
+      const ad = a.publishDate || "";
+      const bd = b.publishDate || "";
+      if (ad !== bd) return bd.localeCompare(ad);
+      return String(b.slug).localeCompare(String(a.slug));
+    });
+
+    for (const f of list) {
+      const opt = document.createElement("option");
+      const date = f.publishDate || "";
+      const title = f.title || f.slug;
+      opt.value = f.slug;
+      opt.textContent = date ? `${date}｜${title}` : title;
+      select.appendChild(opt);
+    }
+  } catch (e) {
+    console.error("[articleList] 一覧取得エラー:", e);
+  }
+}
+
+
+// ===============================
+// 全文検索用 JSON の生成ヘルパー
+// ===============================
+
+// htmlContent からプレーンテキストを抽出
+function extractPlainTextFromHtml(html) {
+  if (!html) return "";
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  // .article-content があればそこだけ、それ以外なら全体
+  const el = tmp.querySelector(".article-content") || tmp;
+  const text = el.textContent || "";
+  return text.replace(/\s+/g, " ").trim();
+}
+
+// 1記事ぶんを全文検索用データに変換
+function buildSearchSourceEntry(slug, article) {
+  const title     = article.title     || "";
+  const subtitle1 = article.subtitle1 || "";
+  const subtitle2 = article.subtitle2 || "";
+  const keywords  = Array.isArray(article.keywords) ? article.keywords : [];
+  const catIds    = Array.isArray(article.categoryIds) ? article.categoryIds : [];
+
+  const bodyText  = extractPlainTextFromHtml(article.htmlContent || "");
+
+  let text = [title, subtitle1, subtitle2, keywords.join(" "), bodyText]
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // あまりにも長くなりすぎるのを防ぐ（4,000文字で切る）
+  if (text.length > 4000) {
+    text = text.slice(0, 4000);
+  }
+
+  // TinySegmenter で分かち書き（失敗しても無視）
+  let tokens = [];
+  try {
+    if (typeof TinySegmenter === "function") {
+      const seg = new TinySegmenter();
+      tokens = seg.segment(text);
+    }
+  } catch (e) {
+    console.warn("[searchSource] TinySegmenter での分かち書きに失敗:", e);
+  }
+
+  return {
+    slug,
+    issue: article.issue || "",
+    publishDate: article.publishDate || "",
+    title,
+    subtitle1,
+    subtitle2,
+    keywords,
+    categoryIds: catIds,
+    isHidden: !!article.isHidden,
+    isNewArticle: !!article.isNewArticle,
+    text,
+    tokens
+  };
+}
+
+// ===============================
+// 全文検索用データを GitHub 上で再生成
+//   ・_manifest.json を読み込む
+//   ・全記事 JSON を GitHub から取得
+//   ・検索用データに変換して SEARCH_SOURCE_PATH に保存
+//   → UI メッセージは出さず、件数を返す
+// ===============================
+window.rebuildSearchSource = async function() {
+  let token;
+  try {
+    token = getGithubToken();
+  } catch (e) {
+    // トークン未設定は致命的なのでそのまま投げる
+    throw new Error("GitHub トークンが設定されていません（全文検索用データを更新できません）。");
+  }
+
+  // manifest をロード
+  await ensureManifestLoaded(false, token);
+  if (!Array.isArray(manifestFiles) || manifestFiles.length === 0) {
+    throw new Error("manifest が空のため、検索用データを作成できません。先に記事を書き出してください。");
+  }
+
+  const articles = [];
+
+  // manifest 上の全記事について JSON を GitHub から取得
+  for (const f of manifestFiles) {
+    const slug = String(f.slug || "").trim();
+    if (!slug) continue;
+
+    const path = `build_plain_articles/${encodeURIComponent(slug)}.json`;
+    try {
+      const file = await githubGetFile(path, token);
+      if (!file) {
+        console.warn("[searchSource] JSON が見つかりません:", path);
+        continue;
+      }
+
+      const rawB64 = (file.content || "").replace(/\n/g, "");
+      const bin = atob(rawB64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const text = new TextDecoder().decode(bytes);
+      const data = JSON.parse(text);
+
+      const entry = buildSearchSourceEntry(slug, data);
+      articles.push(entry);
+    } catch (e) {
+      console.error("[searchSource] 記事取得エラー:", path, e);
+    }
+  }
+
+  // JSON を GitHub に保存
+  const payload = {
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    articles
+  };
+  const jsonText = JSON.stringify(payload, null, 2);
+  const base64   = textToBase64(jsonText);
+
+  await githubPutFile(
+    token,
+    SEARCH_SOURCE_PATH,
+    base64,
+    "Rebuild search source for full-text search"
+  );
+
+  console.log("[searchSource] 再生成完了:", articles.length, "件");
+  return articles.length;
+};
+
+
+// ===============================
+// 7. 保存 / 更新ボタン（JSON/BIN + manifest を GitHub に書き出し）
+// ===============================
+window.saveArticle = async function() {
+  const base = getFormData();
+  if (!base) return;
+
+  const token = getGithubToken();
+  if (!token) {
+    setMessage("GitHub トークンを入力してください。", true);
+    return;
+  }
+
+  const docId = buildArticleDocId(base);
+  if (!docId) {
+    setMessage('号数と掲載順から ID を作成できません（新着以外は両方必須）。', true);
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const article = {
+    ...base,
+    id: docId,
+    slug: docId,
+    createdAt: now,
+    updatedAt: now
+  };
+
+  await exportStaticFilesForArticle(docId, article, token);
+  await updateManifestForArticle(docId, article, token);
+
+  currentArticleId = docId;
+  currentArticleCreatedAt = article.createdAt;
+
+  // ★ 記事保存が終わったら、全文検索用データも再生成
+  try {
+    const count = await window.rebuildSearchSource();
+    setMessage(
+      `GitHub に記事を書き出しました（${docId}.json / ${docId}.bin ※鍵未設定時は BIN スキップ）。` +
+      `全文検索用データも更新しました（${count}件）。`
+    );
+  } catch (e) {
+    console.error("[saveArticle] searchSource 更新エラー:", e);
+    setMessage(
+      `記事は保存できましたが、全文検索用データの更新に失敗しました: ${e.message || e}`,
+      true
+    );
+  }
+};
+
+
+window.updateArticle = async function() {
+  if (!currentArticleId) {
+    setMessage('更新対象の記事 ID がありません。先に JSON を読み込むか、新規保存してください。', true);
+    return;
+  }
+  const base = getFormData();
+  if (!base) return;
+
+  const token = getGithubToken();
+  if (!token) {
+    setMessage("GitHub トークンを入力してください。", true);
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const article = {
+    ...base,
+    id: currentArticleId,
+    slug: currentArticleId,
+    createdAt: currentArticleCreatedAt || now,
+    updatedAt: now
+  };
+
+  await exportStaticFilesForArticle(currentArticleId, article, token);
+  await updateManifestForArticle(currentArticleId, article, token);
+
+  try {
+    const count = await window.rebuildSearchSource();
+    setMessage(
+      `GitHub 上の記事（${currentArticleId}）を更新しました（BIN は鍵未設定時はスキップ）。` +
+      `全文検索用データも更新しました（${count}件）。`
+    );
+  } catch (e) {
+    console.error("[updateArticle] searchSource 更新エラー:", e);
+    setMessage(
+      `記事は更新できましたが、全文検索用データの更新に失敗しました: ${e.message || e}`,
+      true
+    );
+  }
+};
+
+
+
+  window.clearForm = function() {
+    document.getElementById('issue').value = '';
+    document.getElementById('sequence').value = '';
+    document.getElementById('publishDate').value = '';
+    document.getElementById('titleAndSubtitles').value = '';
+    document.getElementById('keywords').value = '';
+    document.getElementById('例外表示').checked = false;
+    document.getElementById('非表示').checked = false;
+    if (quill) quill.setText('');
+
+    const select = document.getElementById('articleIdList');
+    if (select) select.value = '';
+
+    selectedCategoryIds = [];
+    updateCategoryDisplay();
+
+    const isNewCb = document.getElementById('isNewArticle');
+    if (isNewCb) isNewCb.checked = false;
+    toggleNewArticleUI(false);
+    applyFormLocks();
+
+    currentArticleId = null;
+    currentArticleCreatedAt = null;
+
+    setMessage('フォームをクリアし、新規入力モードになりました。');
+  };
+
+// 「登録済み記事の読み込み」の <select> から呼ばれる
+window.loadArticleForEdit = async function(slug) {
+  if (!slug) return;
+
+  let token;
+  try {
+    token = getGithubToken();
+  } catch (e) {
+    alert("GitHub トークンが設定されていません。上部で保存してください。");
+    return;
+  }
+
+  try {
+    // build_plain_articles/{slug}.json を取得
+    const path = `build_plain_articles/${encodeURIComponent(slug)}.json`;
+    const file = await githubGetFile(path, token);
+    if (!file) {
+      alert(`GitHub 上に ${path} が見つかりませんでした。`);
+      return;
+    }
+
+    const rawB64 = (file.content || "").replace(/\n/g, "");
+    const bin = atob(rawB64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const text = new TextDecoder().decode(bytes);
+    const data = JSON.parse(text);
+
+    // 既存のフォーム反映関数を再利用
+    fillFormFromJson(data, slug);
+    setMessage(`GitHub から記事（${slug}）を読み込みました。`);
+  } catch (e) {
+    console.error(e);
+    alert(`記事の読み込みに失敗しました: ${e.message || e}`);
+  }
+};
+
+
+  // ===============================
+  // 8. プレビュー
+  // ===============================
+  window.previewArticle = function () {
+    const fullHtml = buildHtmlFromQuill();
+    document.getElementById('previewContent').innerHTML = fullHtml;
+
+    const val = document.getElementById('titleAndSubtitles').value.trim().split(/\r?\n/);
+    const [rawTitle, rawSub1, rawSub2] = [val[0]||'', val[1]||'', val[2]||''];
+
+    document.getElementById('previewTitle').innerHTML = renderWithManualBreaks(rawTitle);
+    document.getElementById('previewSubtitles').innerHTML = [
+      renderWithManualBreaks(rawSub1),
+      renderWithManualBreaks(rawSub2)
+    ].join('<br>');
+
+    document.getElementById('previewArea').style.display = 'flex';
+  };
+
+  window.closePreview = function() {
+    document.getElementById('previewArea').style.display = 'none';
+  };
+
+
+  // ===============================
+  // 9. カテゴリ管理（ローカルストレージ）
+  //    ・順番付きで保持（order）
+  //    ・▲ / ▼ で並び替え可能
+  // ===============================
+
+  // [{ id, name, order }, ...]
+  let categories = [];
+
+  function getCategoryName(id) {
+    const c = categories.find(c => c.id === id);
+    return c ? c.name : id;
+  }
+
+  function loadCategoriesFromLocal() {
+    try {
+      const raw = localStorage.getItem('kjd_categories');
+      const list = raw ? JSON.parse(raw) : [];
+
+      if (Array.isArray(list)) {
+        // 旧形式 {id,name} も新形式 {id,name,order} も両方OKにする
+        categories = list
+          .filter(c => c && c.id && c.name)
+          .map((c, idx) => ({
+            id: c.id,
+            name: c.name,
+            order: typeof c.order === 'number' ? c.order : idx
+          }))
+          .sort((a, b) => a.order - b.order);
+      } else {
+        categories = [];
+      }
+    } catch (e) {
+      console.warn('[category] load error', e);
+      categories = [];
+    }
+    renderCategoryUIs();
+  }
+
+  function saveCategoriesToLocal() {
+    const list = categories.map((c, index) => ({
+      id: c.id,
+      name: c.name,
+      order: index   // 配列の並びをそのまま保存
+    }));
+    localStorage.setItem('kjd_categories', JSON.stringify(list));
+  }
+
+  function renderCategoryUIs() {
+    const ul = document.getElementById('categoryListUl');
+    const multiCheckboxes = document.getElementById('multiCategoryCheckboxes');
+    if (!ul || !multiCheckboxes) return;
+
+    ul.innerHTML = '';
+    multiCheckboxes.innerHTML = '';
+
+    categories.forEach((c, idx) => {
+      // 管理モーダル側のリスト
+      const li = document.createElement('li');
+      li.className = 'hover:bg-gray-50';
+      li.innerHTML = `
+        <span>${c.name}</span>
+        <div class="flex gap-1">
+          <button onclick="window.moveCategoryUp('${c.id}')" class="text-gray-500 hover:text-gray-700 text-xs px-1 border rounded">▲</button>
+          <button onclick="window.moveCategoryDown('${c.id}')" class="text-gray-500 hover:text-gray-700 text-xs px-1 border rounded">▼</button>
+          <button onclick="window.deleteCategory('${c.id}')" class="text-red-500 hover:text-red-700 text-xs px-1 border rounded">削除</button>
+        </div>
+      `;
+      ul.appendChild(li);
+
+      // 複数選択モーダル側
+      const div = document.createElement('div');
+      div.className = 'flex items-center gap-2 p-1 border rounded hover:bg-blue-50 cursor-pointer';
+      const isChecked = selectedCategoryIds.includes(c.id);
+      div.innerHTML = `
+        <input type="checkbox" class="category-checkbox" id="cat-${c.id}" value="${c.id}" ${isChecked ? 'checked' : ''}>
+        <label for="cat-${c.id}">${c.name}</label>
+      `;
+      multiCheckboxes.appendChild(div);
+    });
+
+    updateCategoryDisplay();
+  }
+
+  window.updateCategoryDisplay = function() {
+    const display = document.getElementById('selected-categories-display');
+    if (!display) return;
+    if (selectedCategoryIds.length > 0) {
+      display.innerHTML = selectedCategoryIds.map(id =>
+        `<span class="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-0.5 rounded-full mr-1 mb-1">${getCategoryName(id)}</span>`
+      ).join('');
+      display.className = '';
+    } else {
+      display.textContent = "-- カテゴリを選択してください --";
+      display.className = "text-gray-500 text-sm";
+    }
+  };
+
+  window.addCategory = function() {
+    const nameInput = document.getElementById('newCategoryName');
+    if (!nameInput) return;
+    const name = nameInput.value.trim();
+    if (!name) return;
+
+    const id = `cat-${Date.now().toString(36)}-${randBase36(4)}`;
+    categories.push({
+      id,
+      name,
+      order: categories.length
+    });
+    saveCategoriesToLocal();
+    renderCategoryUIs();
+
+    nameInput.value = '';
+    setMessage(`カテゴリ「${name}」を追加しました。`);
+  };
+
+  window.deleteCategory = function(id) {
+    if (!confirm('本当にこのカテゴリを削除しますか？（すでに付いている記事のカテゴリIDはそのまま残ります）')) return;
+    categories = categories.filter(c => c.id !== id);
+    selectedCategoryIds = selectedCategoryIds.filter(x => x !== id);
+    saveCategoriesToLocal();
+    renderCategoryUIs();
+    setMessage('カテゴリを削除しました。');
+  };
+
+  window.moveCategoryUp = function(id) {
+    const idx = categories.findIndex(c => c.id === id);
+    if (idx <= 0) return;
+    const tmp = categories[idx - 1];
+    categories[idx - 1] = categories[idx];
+    categories[idx] = tmp;
+    saveCategoriesToLocal();
+    renderCategoryUIs();
+  };
+
+  window.moveCategoryDown = function(id) {
+    const idx = categories.findIndex(c => c.id === id);
+    if (idx < 0 || idx >= categories.length - 1) return;
+    const tmp = categories[idx + 1];
+    categories[idx + 1] = categories[idx];
+    categories[idx] = tmp;
+    saveCategoriesToLocal();
+    renderCategoryUIs();
+  };
+
+  window.openCategoryModal = function() {
+    if (document.getElementById('category-selection-window').classList.contains('is-disabled')) return;
+    document.getElementById('categoryModal').style.display = 'flex';
+  };
+
+  window.closeCategoryModal = function() {
+    document.getElementById('categoryModal').style.display = 'none';
+  };
+
+  window.openMultiCategoryModal = function() {
+    if (document.getElementById('category-selection-window').classList.contains('is-disabled')) return;
+    // 現在の選択状態を反映
+    document.querySelectorAll('.category-checkbox').forEach(cb => {
+      cb.checked = selectedCategoryIds.includes(cb.value);
+    });
+    document.getElementById('multipleCategoryModal').style.display = 'flex';
+  };
+
+  window.closeMultiCategoryModal = function() {
+    document.getElementById('multipleCategoryModal').style.display = 'none';
+  };
+
+  window.applyMultiCategories = function() {
+    const next = [];
+    document.querySelectorAll('.category-checkbox:checked').forEach(cb => next.push(cb.value));
+    selectedCategoryIds = next;
+    updateCategoryDisplay();
+    window.closeMultiCategoryModal();
+  };
+
+  </script>
+
+
+
+  <!-- 社内記事リンクピッカー（UIだけ。ロジックは未実装のまま） -->
+  <div id="articleLinkPicker" class="alp-modal" style="display:none;">
+    <div class="alp-panel">
+      <div class="alp-header">
+        <strong>社内記事リンクを挿入</strong>
+        <button class="alp-close" aria-label="閉じる">×</button>
+      </div>
+
+      <div class="alp-body">
+        <div class="alp-row">
+          <input id="alp-q" type="text" placeholder="号数 / タイトル / 日付（例: 2153, 2024/08/08, キーワード）">
+          <button id="alp-refresh" class="alp-btn">再読込</button>
+        </div>
+
+        <div id="alp-list" class="alp-list">読み込み中…</div>
+
+        <div class="alp-divider"></div>
+
+        <details>
+          <summary class="alp-muted">IDが未定（未登録）の号で入れる（予約リンク）</summary>
+          <div class="alp-row" style="margin-top:8px;">
+            <input id="alp-issue" type="text" placeholder="No.1902 のように号数だけ">
+            <button id="alp-insert-issue" class="alp-btn">No.リンクを挿入</button>
+          </div>
+          <div class="alp-help">※ 閲覧側では該当号の記事選択モーダルが出ます（記事が1本だけなら即表示）。</div>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <style>
+  .alp-modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center}
+  .alp-panel{width:min(760px,95vw);max-height:85vh;overflow:auto;background:#fff;border-radius:12px;border:1px solid #e5e7eb;box-shadow:0 10px 30px rgba(0,0,0,.2)}
+  .alp-header{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid #e5e7eb}
+  .alp-close{border:0;background:transparent;font-size:20px;cursor:pointer}
+  .alp-body{padding:12px}
+  .alp-row{display:flex;gap:8px;align-items:center}
+  .alp-row input{flex:1 1 auto;padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px}
+  .alp-btn{padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer}
+  .alp-list{margin-top:10px;border:1px solid #e5e7eb;border-radius:8px;max-height:48vh;overflow:auto}
+  .alp-item{display:flex;justify-content:space-between;gap:8px;padding:10px;border-bottom:1px solid #f1f5f9}
+  .alp-item:last-child{border-bottom:none}
+  .alp-item-main{min-width:0}
+  .alp-title{font-weight:600}
+  .alp-meta{font-size:12px;color:#64748b;margin-top:2px}
+  .alp-insert{white-space:nowrap}
+  .alp-muted{color:#6b7280}
+  .alp-divider{height:1px;background:#e5e7eb;margin:12px 0}
+  .alp-help{font-size:12px;color:#6b7280;margin-top:4px}
+  </style>
+
+</body>
+</html>

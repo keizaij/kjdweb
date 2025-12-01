@@ -1,0 +1,27 @@
+# Node
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Firebase
+.firebase/
+storage-debug.log
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# env & keys
+*.env
+serviceAccount.json
+
+# Generated static builds
+public/build_plain_articles/
+public/protected_enc/
+public/photo/
+
+# Personal config
+*.local

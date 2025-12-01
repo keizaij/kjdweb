@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>広告管理（ログインなし / Hosting画像 / 固定枠対応）</title>
+
+<!-- Firebase compat（Authなし / Firestoreのみ） -->
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
+
+<style>
+  :root{
+    --c-border:#e5e7eb; --c-mute:#6b7280; --c-accent:#2563eb;
+    --gap:12px; --radius:10px;
+  }
+  *{ box-sizing:border-box; }
+  body{
+    font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN","Meiryo","Noto Sans JP",sans-serif;
+    margin:16px; color:#111827; background:#f8fafc; line-height:1.6;
+  }
+  h1{ font-size:20px; margin:0 0 16px; }
+  h2{ font-size:16px; margin:24px 0 8px; }
+  .card{
+    background:#fff; border:1px solid var(--c-border); border-radius:var(--radius);
+    padding:16px; margin-bottom:16px; box-shadow:0 1px 2px rgba(0,0,0,.03);
+  }
+  .row{ display:grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
+  .row-3{ display:grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--gap); }
+  .field label{ display:block; font-size:12px; color:var(--c-mute); margin-bottom:4px; }
+  .field input[type="text"], .field input[type="url"], .field input[type="number"], .field select{
+    width:100%; padding:8px 10px; border:1px solid var(--c-border); border-radius:8px; background:#fff;
+  }
+  .muted{ color:var(--c-mute); font-size:12px; }
+  .btn{ appearance:none; border:1px solid var(--c-border); background:#fff; padding:8px 12px; border-radius:8px; cursor:pointer; }
+  .btn.primary{ background:var(--c-accent); color:#fff; border-color:var(--c-accent); }
+  .btn.danger{ background:#dc2626; color:#fff; border-color:#dc2626; }
+  .btn:disabled{ opacity:.6; cursor:not-allowed; }
+  .actions{ display:flex; gap:8px; flex-wrap:wrap; }
+
+  .grid-thumbs{ display:grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap:8px; }
+  .thumb{
+    border:1px solid var(--c-border); background:#fff; border-radius:8px; overflow:hidden; cursor:pointer;
+    position:relative; aspect-ratio: 4 / 3; display:flex; align-items:center; justify-content:center;
+  }
+  .thumb img{ max-width:100%; max-height:100%; object-fit:contain; display:block; }
+  .thumb .idx{
+    position:absolute; top:6px; left:6px; font-size:12px; background:rgba(0,0,0,.65); color:#fff; padding:2px 6px; border-radius:999px;
+  }
+  .thumb.active{ outline:2px solid var(--c-accent); }
+  .preview{ border:1px dashed var(--c-border); background:#fff; border-radius:8px; padding:10px; text-align:center; min-height:120px; }
+  .preview img{ max-width:100%; height:120px; object-fit:contain; display:inline-block; }
+
+  .chips{ display:flex; gap:8px; flex-wrap:wrap; }
+  .chip{ display:inline-flex; align-items:center; gap:6px; border:1px solid var(--c-border); padding:6px 10px; border-radius:999px; background:#fff; }
+  .chip input{ margin:0; }
+
+  .months{ display:grid; grid-template-columns: repeat(6, 1fr); gap:6px; }
+  .months label{ display:flex; gap:6px; align-items:center; font-size:12px; border:1px solid var(--c-border); padding:6px 8px; border-radius:8px; background:#fff; }
+
+  .bar{ height:1px; background:var(--c-border); margin:12px 0; }
+
+  /* modal */
+  .modal{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.45); z-index:50; }
+  .modal .panel{ width:min(520px, 92vw); background:#fff; border-radius:12px; padding:16px; border:1px solid var(--c-border); box-shadow:0 10px 30px rgba(0,0,0,.2); }
+  .modal .footer{ display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
+
+  @media (max-width: 900px){ .row, .row-3{ grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+  <h1>広告管理（ログインなし / Hosting画像 / 固定枠対応）</h1>
+
+  <!-- 会社の選択 & 編集 + 追加ボタン -->
+  <section class="card">
+    <h2>会社</h2>
+    <div class="row">
+      <div class="field">
+        <label>会社を選択</label>
+        <select id="companySelect" onchange="onCompanyChange()"></select>
+        <div class="muted">選ぶと下に登録済み広告のサムネイルが並びます。</div>
+      </div>
+      <div class="field">
+        <label>（編集）会社名</label>
+        <input type="text" id="editCompanyName" placeholder="会社名を編集…" />
+        <div class="actions" style="margin-top:8px;">
+          <button class="btn" onclick="saveCompanyName()">会社名を保存</button>
+          <button class="btn primary" onclick="openCompanyModal()">＋ 新規会社を追加</button>
+        </div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <div class="field">
+        <label>会社ID（参照用）</label>
+        <input type="text" id="companyIdView" readonly />
+      </div>
+    </div>
+  </section>
+
+  <!-- Add Company Modal -->
+  <div id="companyModal" class="modal" role="dialog" aria-modal="true" aria-label="新規会社を追加">
+    <div class="panel">
+      <h2 style="margin-top:0;">新規会社を追加</h2>
+      <div class="field">
+        <label>会社名</label>
+        <input type="text" id="newCompanyName" placeholder="例）株式会社〇〇" />
+      </div>
+      <div class="footer">
+        <button class="btn" onclick="closeCompanyModal()">キャンセル</button>
+        <button class="btn primary" onclick="saveNewCompany()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 会社の既存広告（サムネイル & 番号Picker） -->
+  <section class="card">
+    <h2>この会社の登録済み広告</h2>
+    <div class="actions" style="margin-bottom:8px;">
+      <select id="adPicker" onchange="pickAdByIndex(this.value)"><!-- New / #1 / #2 ... --></select>
+      <button class="btn" onclick="newAd()">新規広告</button>
+      <button class="btn danger" id="deleteBtn" onclick="deleteAd()" disabled>削除</button>
+    </div>
+    <div id="adThumbs" class="grid-thumbs"></div>
+  </section>
+
+  <!-- 広告編集フォーム -->
+  <section class="card">
+    <h2>広告の編集</h2>
+    <input type="hidden" id="adId" />
+
+    <div class="row">
+      <div class="field">
+        <label>画像URL（Hostingの /banners/... を推奨）</label>
+        <input type="url" id="adImageUrl" placeholder="https://…/banners/example.jpg" oninput="renderPreview()" />
+        <div class="muted">Storage切替後はダウンロードURLでもOK。</div>
+      </div>
+      <div class="field">
+        <label>クリック先URL</label>
+        <input type="url" id="adClickUrl" placeholder="https://example.com/..." />
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label>代替テキスト（alt）</label>
+        <input type="text" id="adAlt" placeholder="画像の説明（任意）" />
+      </div>
+      <div class="field">
+        <label>プレビュー</label>
+        <div class="preview" id="previewBox"><span class="muted">画像URLを入力すると表示</span></div>
+      </div>
+    </div>
+
+    <div class="bar"></div>
+
+    <div class="row">
+      <div class="field">
+        <label>掲載箇所</label>
+        <div class="chips">
+          <label class="chip"><input type="checkbox" id="plList" checked />一覧（下部ドロワー）</label>
+          <label class="chip"><input type="checkbox" id="plArticle" checked />記事（モーダル末尾）</label>
+        </div>
+      </div>
+      <div class="field">
+        <label>固定枠（1〜6）※未指定=固定なし</label>
+        <div class="row">
+          <div class="field">
+            <label>固定枠（一覧）</label>
+            <select id="fixedListPos">
+              <option value="">未指定</option>
+              <option>1</option><option>2</option><option>3</option>
+              <option>4</option><option>5</option><option>6</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>固定枠（記事）</label>
+            <select id="fixedArticlePos">
+              <option value="">未指定</option>
+              <option>1</option><option>2</option><option>3</option>
+              <option>4</option><option>5</option><option>6</option>
+            </select>
+          </div>
+        </div>
+        <div class="muted" style="margin-top:6px;">固定枠を指定した広告は、その枠を常に専有します（残り枠のローテからは同一会社を除外するのが推奨）。</div>
+      </div>
+    </div>
+
+    <div class="bar"></div>
+
+    <div class="row">
+      <div class="field">
+        <label>有効・重み</label>
+        <div class="chips" style="margin-bottom:8px;">
+          <label class="chip"><input type="checkbox" id="adActive" checked />有効（表示対象）</label>
+        </div>
+        <div class="field">
+          <label>表示頻度（重み / 大きいほど“出にくい”）</label>
+          <input type="number" id="adWeight" value="1" min="1" step="1" />
+        </div>
+      </div>
+      <div class="field">
+        <label>掲載月（未選択 or 空は「通年」扱い）</label>
+        <div class="chips" style="margin-bottom:8px;">
+          <label class="chip"><input type="checkbox" id="monthsAll" onchange="toggleAllMonths(this.checked)" />通年（全選択）</label>
+          <button class="btn" type="button" onclick="clearMonths()">全解除</button>
+        </div>
+        <div id="monthsBox" class="months"></div>
+      </div>
+    </div>
+
+    <div class="actions" style="margin-top:12px;">
+      <button class="btn primary" onclick="saveAd()">保存</button>
+      <span id="status" class="muted"></span>
+    </div>
+  </section>
+
+<script>
+/* ==== Firebase init ==== */
+const firebaseConfig = {
+  apiKey: "AIzaSyAJT3EnF4s6kfU6RuC9nJvOrs9FtG_RMR0",
+  authDomain: "economic-journals-digital.firebaseapp.com",
+  projectId: "economic-journals-digital",
+  storageBucket: "economic-journals-digital.appspot.com",
+  messagingSenderId: "1032175762907",
+  appId: "1:1032175762907:web:e46fca907bb52c9b5fbbfe"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// あなたのホスティングのベースURLに合わせて変更（カスタムドメインでもOK）
+const HOSTING_BASE = 'https://economic-journals-digital.web.app'; 
+
+function normalizeImagePath(input){
+  const s = (input || '').trim();
+  if (!s) return '';
+
+  // すでに http(s) → そのまま
+  if (/^https?:\/\//i.test(s)) return s;
+
+  // file:///... or Windowsパス → 最後のファイル名だけ抜き出し
+  if (/^(file:\/\/|[a-zA-Z]:\\)/.test(s)) {
+    const fname = s.replace(/^file:\/\//,'').split(/[/\\]/).pop();
+    return '/banners/' + fname;
+  }
+
+  // スラッシュ or バックスラッシュを含む相対パスっぽい入力 → ファイル名だけ採用
+  if (/[\/\\]/.test(s)) {
+    const fname = s.split(/[/\\]/).pop();
+    return '/banners/' + fname;
+  }
+
+  // 先頭スラッシュなら相対ルート扱い
+  if (s.startsWith('/')) return s;
+
+  // それ以外（単なるファイル名）→ /banners/filename
+  return '/banners/' + s;
+}
+
+function toAbsolute(u){
+  if (!u) return '';
+  if (/^https?:\/\//i.test(u)) return u;
+  return HOSTING_BASE.replace(/\/$/, '') + u; // /banners/... を https://.../banners/... に
+}
+
+
+/* ==== State ==== */
+let companies = [];           // [{id, name}]
+let currentCompanyId = null;
+
+let ads = [];                 // [{id, ...data}]
+let selectedAdIndex = -1;     // -1 = 新規 / 0..n = 既存
+
+/* ==== Helpers ==== */
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const byId = id => document.getElementById(id);
+function setStatus(msg){ byId('status').textContent = msg||''; if(msg) setTimeout(()=>setStatus(''), 2000); }
+function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escapeAttr(s){ return String(s||'').replace(/"/g,'&quot;'); }
+
+/* ==== Companies ==== */
+async function loadCompanies(){
+  const snap = await db.collection('companies').orderBy('name').get();
+  companies = snap.docs.map(d => ({ id: d.id, ...(d.data()||{}) }));
+  const sel = byId('companySelect');
+  sel.innerHTML = companies.map(c => `<option value="${c.id}">${escapeHtml(c.name || '(無名)')}</option>`).join('');
+  if (!currentCompanyId && companies[0]) currentCompanyId = companies[0].id;
+  if (currentCompanyId) sel.value = currentCompanyId;
+  const company = companies.find(c => c.id === currentCompanyId);
+  byId('editCompanyName').value = company?.name || '';
+  byId('companyIdView').value = currentCompanyId || '';
+}
+async function onCompanyChange(){
+  currentCompanyId = byId('companySelect').value || null;
+  const company = companies.find(c => c.id === currentCompanyId);
+  byId('editCompanyName').value = company?.name || '';
+  byId('companyIdView').value = currentCompanyId || '';
+  await reloadAds();
+}
+async function saveCompanyName(){
+  if (!currentCompanyId) return;
+  const name = byId('editCompanyName').value.trim();
+  await db.collection('companies').doc(currentCompanyId).set({ name }, { merge:true });
+  await loadCompanies();
+  setStatus('会社名を更新しました');
+}
+
+/* Add Company Modal */
+function openCompanyModal(){ byId('companyModal').style.display='flex'; byId('newCompanyName').value=''; byId('newCompanyName').focus(); }
+function closeCompanyModal(){ byId('companyModal').style.display='none'; }
+async function saveNewCompany(){
+  const name = byId('newCompanyName').value.trim();
+  if (!name){ alert('会社名を入力してください'); return; }
+  const ref = await db.collection('companies').add({ name });
+  currentCompanyId = ref.id;
+  closeCompanyModal();
+  await loadCompanies();
+  await reloadAds();
+  setStatus('会社を追加しました');
+}
+
+/* ==== Ads ==== */
+async function reloadAds(){
+  if (!currentCompanyId){
+    byId('adThumbs').innerHTML = '';
+    byId('adPicker').innerHTML = '<option value="-1">新規広告</option>';
+    newAd(); 
+    return;
+  }
+
+  let snap;
+  try {
+    // 複合インデックスがあればこちらでOK
+    snap = await db.collection('ads')
+      .where('companyId','==', currentCompanyId)
+      .orderBy('createdAt','asc')
+      .get();
+  } catch (e) {
+    console.warn('[ads] orderBy(createdAt) 失敗 → フォールバックします', e);
+    // インデックス未作成 or 一部ドキュメントに createdAt 無し → 素直に where のみ
+    snap = await db.collection('ads')
+      .where('companyId','==', currentCompanyId)
+      .get();
+  }
+
+  ads = snap.docs.map(d => ({ id: d.id, ...(d.data()||{}) }));
+
+  // createdAt がない古いデータもある想定 → クライアント側で軽く整列
+  ads.sort((a,b) => {
+    const ca = a.createdAt?.toMillis?.() || 0;
+    const cb = b.createdAt?.toMillis?.() || 0;
+    if (ca !== cb) return ca - cb;                // 古い順
+    return (a.imageUrl||'').localeCompare(b.imageUrl||'');
+  });
+
+  renderThumbs();
+  renderPicker();
+  if (ads.length){ pickAdByIndex(0); } else { newAd(); }
+}
+function renderThumbs(){
+  const el = byId('adThumbs');
+  if (!ads.length){ el.innerHTML = '<div class="muted">登録済み広告はありません。</div>'; return; }
+  el.innerHTML = ads.map((a,i)=>`
+    <div class="thumb ${i===selectedAdIndex?'active':''}" onclick="pickAdByIndex(${i})" title="#${i+1}">
+      <span class="idx">#${i+1}</span>
+  ${a.imageUrl
+  ? `<img src="${escapeAttr(toAbsolute(normalizeImagePath(a.imageUrl)))}" alt="" referrerpolicy="no-referrer"
+        onerror="this.onerror=null;
+                 this.replaceWith(Object.assign(document.createElement('span'),
+                   {className:'muted', textContent:'読込失敗'}));">`
+  : '<span class="muted">No Image</span>'}
+
+
+    </div>
+  `).join('');
+}
+function renderPicker(){
+  const sel = byId('adPicker');
+  sel.innerHTML = ['<option value="-1">新規広告</option>'].concat(
+    ads.map((_,i)=>`<option value="${i}">#${i+1}</option>`)
+  ).join('');
+  sel.value = String(selectedAdIndex);
+  byId('deleteBtn').disabled = !(selectedAdIndex>=0);
+}
+function pickAdByIndex(idxStr){
+  const idx = Number(idxStr); selectedAdIndex = idx;
+  if (idx>=0 && ads[idx]) fillFormFromAd(ads[idx]); else newAd();
+  renderThumbs(); renderPicker();
+}
+function newAd(){
+  selectedAdIndex = -1;
+  byId('adId').value = '';
+  byId('adImageUrl').value = '';
+  byId('adClickUrl').value = '';
+  byId('adAlt').value = '';
+  byId('adActive').checked = true;
+  byId('plList').checked = true; byId('plArticle').checked = true;
+  byId('adWeight').value = 1;
+  byId('fixedListPos').value = '';
+  byId('fixedArticlePos').value = '';
+  clearMonths();
+byId('monthsAll').checked = true;
+toggleAllMonths(true);   // ← 無効化＆未選択表示にする
+
+  renderPreview(); renderThumbs(); renderPicker();
+}
+function fillFormFromAd(a){
+  byId('adId').value = a.id || '';
+  byId('adImageUrl').value = a.imageUrl || '';
+  byId('adClickUrl').value = a.clickUrl || '';
+  byId('adAlt').value = a.alt || '';
+  byId('adActive').checked = !!a.active;
+  byId('plList').checked = Array.isArray(a.placements) ? a.placements.includes('list') : true;
+  byId('plArticle').checked = Array.isArray(a.placements) ? a.placements.includes('article') : true;
+  byId('adWeight').value = (typeof a.weight === 'number' && a.weight>0) ? a.weight : 1;
+  byId('fixedListPos').value = (a.fixedListPos>=1 && a.fixedListPos<=6) ? String(a.fixedListPos) : '';
+  byId('fixedArticlePos').value = (a.fixedArticlePos>=1 && a.fixedArticlePos<=6) ? String(a.fixedArticlePos) : '';
+
+  const months = Array.isArray(a.months) ? a.months : [];
+const all = months.length === 0;            // ← 空なら通年
+byId('monthsAll').checked = all;
+
+// まず全部リセット
+$$('#monthsBox input[type="checkbox"]').forEach(ch => { ch.checked = false; ch.disabled = all; });
+
+if (!all){
+  months.forEach(m => { const box = byId('m'+m); if (box) box.checked = true; });
+}
+
+  else { toggleAllMonths(true); }
+  renderPreview();
+}
+function getFormData(){
+const imageUrlRaw = byId('adImageUrl').value.trim();
+const imageUrl = toAbsolute(normalizeImagePath(imageUrlRaw)); // ★絶対URLで保存
+  const clickUrl = byId('adClickUrl').value.trim();
+  const alt = byId('adAlt').value.trim();
+  const active = byId('adActive').checked;
+  const placements = [
+    byId('plList').checked ? 'list' : null,
+    byId('plArticle').checked ? 'article' : null,
+  ].filter(Boolean);
+  const weight = Math.max(1, Number(byId('adWeight').value||1));
+
+  const fixedListPos = (byId('fixedListPos').value ? Number(byId('fixedListPos').value) : null);
+  const fixedArticlePos = (byId('fixedArticlePos').value ? Number(byId('fixedArticlePos').value) : null);
+
+  const all = byId('monthsAll').checked;
+  const months = all ? [] : $$('#monthsBox input[type="checkbox"]').filter(ch=>ch.checked).map(ch=>Number(ch.value));
+
+  return {
+    companyId: currentCompanyId,
+    imageUrl, clickUrl, alt,
+    active, placements, weight,
+    // 新フィールド（数値 or null）
+    fixedListPos, fixedArticlePos,
+    // 互換（boolean）
+    fixedOnList: !!fixedListPos, fixedOnArticle: !!fixedArticlePos,
+    months
+  };
+}
+async function saveAd(){
+  if (!currentCompanyId){ alert('会社を選択してください'); return; }
+  const data = getFormData();
+  if (!data.imageUrl){ alert('画像URLは必須です'); return; }
+  const now = firebase.firestore.FieldValue.serverTimestamp();
+  const adId = byId('adId').value;
+  if (adId){
+    await db.collection('ads').doc(adId).set({ ...data, updatedAt: now }, { merge:true });
+    setStatus('広告を更新しました');
+  }else{
+    await db.collection('ads').add({ ...data, createdAt: now, updatedAt: now });
+    setStatus('広告を作成しました');
+  }
+  await reloadAds();
+}
+async function deleteAd(){
+  const adId = byId('adId').value;
+  if (!adId) return;
+  if (!confirm('この広告を削除します。よろしいですか？')) return;
+  await db.collection('ads').doc(adId).delete();
+  setStatus('広告を削除しました');
+  await reloadAds();
+}
+
+/* ==== Months UI ==== */
+function buildMonths(){
+  const root = byId('monthsBox');
+  root.innerHTML = Array.from({length:12},(_,i)=>i+1).map(m=>`
+    <label><input type="checkbox" id="m${m}" value="${m}"/> ${m}月</label>
+  `).join('');
+}
+function toggleAllMonths(checked){
+  // 通年ON → 月チェックはすべて無効化＆未選択表示（保存時は months: []）
+  $$('#monthsBox input[type="checkbox"]').forEach(ch => {
+    ch.checked = false;
+    ch.disabled = !!checked;
+  });
+}
+function clearMonths(){
+  // 手動で全部外す（＝通年ではない）。必要なら monthsAll も外す
+  $$('#monthsBox input[type="checkbox"]').forEach(ch => {
+    ch.checked = false;
+    ch.disabled = false;
+  });
+  byId('monthsAll').checked = false;
+}
+
+
+/* ==== Preview ==== */
+function renderPreview(){
+  const raw = byId('adImageUrl').value.trim();
+  const urlAbs = toAbsolute(normalizeImagePath(raw));
+  const box = byId('previewBox');
+
+  if (!urlAbs){
+    box.innerHTML = '<span class="muted">画像URLを入力すると表示</span>';
+    return;
+  }
+  box.innerHTML = '<span class="muted">読み込み中…</span>';
+
+  const img = new Image();
+  img.referrerPolicy = 'no-referrer';
+  img.onload = () => { box.innerHTML = ''; box.appendChild(img); };
+  img.onerror = () => {
+    box.innerHTML = '<span class="muted" style="color:#b91c1c;">画像を読み込めませんでした（URL/公開設定/HTTPS を確認）</span>';
+  };
+  img.src = urlAbs;
+}
+
+
+
+/* ==== Boot ==== */
+(async function boot(){
+  buildMonths();
+  await loadCompanies();
+  await reloadAds();
+})();
+</script>
+</body>
+</html>
