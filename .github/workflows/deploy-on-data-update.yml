@@ -5,7 +5,7 @@ on:
   repository_dispatch:
     types: [kjdweb-data-updated]
 
-  # 手動テスト用
+  # 手動テスト
   workflow_dispatch:
 
 jobs:
