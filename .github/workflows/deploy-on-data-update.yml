@@ -1,0 +1,44 @@
+name: Deploy KJD web on data update
+
+on:
+  # kjdweb-data からの repository_dispatch で起動
+  repository_dispatch:
+    types: [kjdweb-data-updated]
+
+  # 手動実行もできるように
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1) この kjdweb リポジトリをチェックアウト
+      - name: Checkout kjdweb repo
+        uses: actions/checkout@v4
+
+      # 2) Node.js をセットアップ
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # 3) Firebase CLI をインストール
+      - name: Install Firebase CLI
+      run: npm install -g firebase-tools
+
+      # 4) kjdweb-data から public/ に静的ファイルを同期
+      - name: Pull static data from kjdweb-data repo
+        env:
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+        run: |
+          node scripts/pull-from-data.js
+
+      # 5) Firebase Hosting にデプロイ
+      - name: Deploy to Firebase Hosting
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/gcp-key.json
+          FIREBASE_PROJECT: economic-journals-digital
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > "$GOOGLE_APPLICATION_CREDENTIALS"
+          firebase deploy --project "$FIREBASE_PROJECT" --only hosting
