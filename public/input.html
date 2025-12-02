@@ -714,7 +714,7 @@ async function buildJsonAndBin(slug, article) {
   let selectedCategoryIds = [];
   let currentArticleId = null;        // いま編集している記事ID（215301 とか NEW-...）
   let currentArticleCreatedAt = null; // createdAt を保持しておく
-
+  let githubBusy = false;
 
   // ===============================
   // 0-1. デフォルトカテゴリ一覧
@@ -1673,145 +1673,127 @@ function finishGitSave(ok) {
 // 7. 保存 / 更新ボタン（JSON/BIN + manifest を GitHub に書き出し）
 // ===============================
 window.saveArticle = async function() {
-
-  // ★ クールダウン / 多重押しガード
-  if (!canStartGitSave()) {
+  // ★ すでに GitHub 書き込み中ならブロック
+  if (githubBusy) {
+    setMessage(
+      "現在 GitHub へ書き込み中です。保存処理が完了するまで、もうしばらくお待ちください。",
+      true
+    );
     return;
   }
 
- // ★ ここで最初のステータス表示
-  setMessage("保存準備中…（GitHub へ書き込み中です）");
+  const base = getFormData();
+  if (!base) return;
+
+  const token = getGithubToken();
+  if (!token) {
+    setMessage("GitHub トークンを入力してください。", true);
+    return;
+  }
+
+  const docId = buildArticleDocId(base);
+  if (!docId) {
+    setMessage('号数と掲載順から ID を作成できません（新着以外は両方必須）。', true);
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const article = {
+    ...base,
+    id: docId,
+    slug: docId,
+    createdAt: now,
+    updatedAt: now,
+  };
 
   try {
-    const base = getFormData();
-    if (!base) {
-      // フォーム不備など → 保存開始扱いにはしたが、失敗として扱う
-      finishGitSave(false);
-      return;
-    }
+    // ★ ここで busy 開始＋「保存準備中」ステータス表示
+    githubBusy = true;
+    setMessage("GitHub への保存準備中です…（書き込み処理が完了するまで、保存ボタンは使えません）");
 
-    const token = getGithubToken();
-    if (!token) {
-      setMessage("GitHub トークンを入力してください。", true);
-      finishGitSave(false);
-      return;
-    }
-
-    const docId = buildArticleDocId(base);
-    if (!docId) {
-      setMessage('号数と掲載順から ID を作成できません（新着以外は両方必須）。', true);
-      finishGitSave(false);
-      return;
-    }
-
-    const now = new Date().toISOString();
-    const article = {
-      ...base,
-      id: docId,
-      slug: docId,
-      createdAt: now,
-      updatedAt: now
-    };
-
-    // JSON / BIN / manifest 書き出し
     await exportStaticFilesForArticle(docId, article, token);
     await updateManifestForArticle(docId, article, token);
 
-    currentArticleId       = docId;
+    currentArticleId = docId;
     currentArticleCreatedAt = article.createdAt;
 
     // ★ 記事保存が終わったら、全文検索用データも再生成
-    try {
-      const count = await window.rebuildSearchSource();
-      setMessage(
-        `GitHub に記事を書き出しました（${docId}.json / ${docId}.bin ※鍵未設定時は BIN スキップ）。` +
-        `全文検索用データも更新しました（${count}件）。`
-      );
-    } catch (e) {
-      console.error("[saveArticle] searchSource 更新エラー:", e);
-      setMessage(
-        `記事は保存できましたが、全文検索用データの更新に失敗しました: ${e.message || e}`,
-        true
-      );
-    }
+    const count = await window.rebuildSearchSource();
 
-    // ここまで来たら成功
-    finishGitSave(true);
-
-  } catch (e) {
-    console.error("[saveArticle] 保存中にエラー:", e);
+    // ★ 最後にいつもの完了メッセージで上書き
     setMessage(
-      `GitHub への保存中にエラーが発生しました: ${e.message || e}`,
+      `GitHub に記事を書き出しました（${docId}.json / ${docId}.bin ※鍵未設定時は BIN スキップ）。` +
+      `全文検索用データも更新しました（${count}件）。`
+    );
+  } catch (e) {
+    console.error("[saveArticle] error:", e);
+    setMessage(
+      `保存処理中にエラーが発生しました: ${e.message || e}`,
       true
     );
-    finishGitSave(false);
+  } finally {
+    // ★ エラーでも成功でも busy を解除
+    githubBusy = false;
   }
 };
 
 
 
 window.updateArticle = async function() {
-
-  // ★ クールダウン / 多重押しガード
-  if (!canStartGitSave()) {
+  if (!currentArticleId) {
+    setMessage('更新対象の記事 ID がありません。先に JSON を読み込むか、新規保存してください。', true);
     return;
   }
 
+  // ★ すでに GitHub 書き込み中ならブロック
+  if (githubBusy) {
+    setMessage(
+      "現在 GitHub へ書き込み中です。更新処理が完了するまで、もうしばらくお待ちください。",
+      true
+    );
+    return;
+  }
+
+  const base = getFormData();
+  if (!base) return;
+
+  const token = getGithubToken();
+  if (!token) {
+    setMessage("GitHub トークンを入力してください。", true);
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const article = {
+    ...base,
+    id: currentArticleId,
+    slug: currentArticleId,
+    createdAt: currentArticleCreatedAt || now,
+    updatedAt: now,
+  };
+
   try {
-    if (!currentArticleId) {
-      setMessage('更新対象の記事 ID がありません。先に JSON を読み込むか、新規保存してください。', true);
-      finishGitSave(false);
-      return;
-    }
-
-    const base = getFormData();
-    if (!base) {
-      finishGitSave(false);
-      return;
-    }
-
-    const token = getGithubToken();
-    if (!token) {
-      setMessage("GitHub トークンを入力してください。", true);
-      finishGitSave(false);
-      return;
-    }
-
-    const now = new Date().toISOString();
-    const article = {
-      ...base,
-      id: currentArticleId,
-      slug: currentArticleId,
-      createdAt: currentArticleCreatedAt || now,
-      updatedAt: now
-    };
+    // ★ ここで busy 開始＋「保存準備中」ステータス表示
+    githubBusy = true;
+    setMessage("GitHub への更新準備中です…（書き込み処理が完了するまで、更新ボタンは使えません）");
 
     await exportStaticFilesForArticle(currentArticleId, article, token);
     await updateManifestForArticle(currentArticleId, article, token);
 
-    try {
-      const count = await window.rebuildSearchSource();
-      setMessage(
-        `GitHub 上の記事（${currentArticleId}）を更新しました（BIN は鍵未設定時はスキップ）。` +
-        `全文検索用データも更新しました（${count}件）。`
-      );
-    } catch (e) {
-      console.error("[updateArticle] searchSource 更新エラー:", e);
-      setMessage(
-        `記事は更新できましたが、全文検索用データの更新に失敗しました: ${e.message || e}`,
-        true
-      );
-    }
-
-    finishGitSave(true);
-
-  } catch (e) {
-    console.error("[updateArticle] 更新中にエラー:", e);
+    const count = await window.rebuildSearchSource();
     setMessage(
-      `GitHub への更新中にエラーが発生しました: ${e.message || e}`,
+      `GitHub 上の記事（${currentArticleId}）を更新しました（BIN は鍵未設定時はスキップ）。` +
+      `全文検索用データも更新しました（${count}件）。`
+    );
+  } catch (e) {
+    console.error("[updateArticle] error:", e);
+    setMessage(
+      `記事は更新できませんでした（全文検索用データ含む）: ${e.message || e}`,
       true
     );
-    finishGitSave(false);
+  } finally {
+    // ★ 忘れず解除
+    githubBusy = false;
   }
 };
 
