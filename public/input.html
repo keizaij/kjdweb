@@ -714,7 +714,7 @@ async function buildJsonAndBin(slug, article) {
   let selectedCategoryIds = [];
   let currentArticleId = null;        // いま編集している記事ID（215301 とか NEW-...）
   let currentArticleCreatedAt = null; // createdAt を保持しておく
-  let githubBusy = false;
+
 
   // ===============================
   // 0-1. デフォルトカテゴリ一覧
@@ -1672,28 +1672,35 @@ function finishGitSave(ok) {
 // ===============================
 // 7. 保存 / 更新ボタン（JSON/BIN + manifest を GitHub に書き出し）
 // ===============================
-window.saveArticle = async function() {
-  // ★ すでに GitHub 書き込み中ならブロック
-  if (githubBusy) {
-    setMessage(
-      "現在 GitHub へ書き込み中です。保存処理が完了するまで、もうしばらくお待ちください。",
-      true
-    );
+window.saveArticle = async function () {
+  // ① まずは GitHub 書き込みガード
+  if (!canStartGitSave()) {
+    // ここで false が返るときは、すでにモーダルを出している
     return;
   }
 
+  // ② フォーム値取得（ここで null なら保存しない）
   const base = getFormData();
-  if (!base) return;
-
-  const token = getGithubToken();
-  if (!token) {
-    setMessage("GitHub トークンを入力してください。", true);
+  if (!base) {
+    finishGitSave(false);
     return;
   }
 
+  // ③ トークン取得（例外投げるので try/catch）
+  let token;
+  try {
+    token = getGithubToken();
+  } catch (e) {
+    setMessage(e.message || "GitHub トークンを入力してください。", true);
+    finishGitSave(false);
+    return;
+  }
+
+  // ④ docId 作成
   const docId = buildArticleDocId(base);
   if (!docId) {
     setMessage('号数と掲載順から ID を作成できません（新着以外は両方必須）。', true);
+    finishGitSave(false);
     return;
   }
 
@@ -1706,25 +1713,27 @@ window.saveArticle = async function() {
     updatedAt: now,
   };
 
+  let ok = false;
   try {
-    // ★ ここで busy 開始＋「保存準備中」ステータス表示
-    githubBusy = true;
-    setMessage("GitHub への保存準備中です…（書き込み処理が完了するまで、保存ボタンは使えません）");
+    setMessage("記事データ生成中…（GitHub リポジトリに書き込み中）");
 
+    // ⑤ 記事 JSON / BIN / 画像
     await exportStaticFilesForArticle(docId, article, token);
+
+    // ⑥ manifest 更新（一覧）
     await updateManifestForArticle(docId, article, token);
 
     currentArticleId = docId;
     currentArticleCreatedAt = article.createdAt;
 
-    // ★ 記事保存が終わったら、全文検索用データも再生成
+    // ⑦ 全文検索用データを再生成
     const count = await window.rebuildSearchSource();
 
-    // ★ 最後にいつもの完了メッセージで上書き
     setMessage(
       `GitHub に記事を書き出しました（${docId}.json / ${docId}.bin ※鍵未設定時は BIN スキップ）。` +
-      `全文検索用データも更新しました（${count}件）。`
+      `　全文検索用データも更新しました（${count}件）。`
     );
+    ok = true;
   } catch (e) {
     console.error("[saveArticle] error:", e);
     setMessage(
@@ -1732,34 +1741,37 @@ window.saveArticle = async function() {
       true
     );
   } finally {
-    // ★ エラーでも成功でも busy を解除
-    githubBusy = false;
+    // ⑧ クールダウン記録
+    finishGitSave(ok);
   }
 };
 
 
 
-window.updateArticle = async function() {
+window.updateArticle = async function () {
   if (!currentArticleId) {
     setMessage('更新対象の記事 ID がありません。先に JSON を読み込むか、新規保存してください。', true);
     return;
   }
 
-  // ★ すでに GitHub 書き込み中ならブロック
-  if (githubBusy) {
-    setMessage(
-      "現在 GitHub へ書き込み中です。更新処理が完了するまで、もうしばらくお待ちください。",
-      true
-    );
+  // ① GitHub 書き込みガード
+  if (!canStartGitSave()) {
     return;
   }
 
   const base = getFormData();
-  if (!base) return;
+  if (!base) {
+    finishGitSave(false);
+    return;
+  }
 
-  const token = getGithubToken();
-  if (!token) {
-    setMessage("GitHub トークンを入力してください。", true);
+  // ② トークン取得
+  let token;
+  try {
+    token = getGithubToken();
+  } catch (e) {
+    setMessage(e.message || "GitHub トークンを入力してください。", true);
+    finishGitSave(false);
     return;
   }
 
@@ -1772,28 +1784,39 @@ window.updateArticle = async function() {
     updatedAt: now,
   };
 
+  let ok = false;
   try {
-    // ★ ここで busy 開始＋「保存準備中」ステータス表示
-    githubBusy = true;
     setMessage("記事データ生成中…（GitHub リポジトリ書込中）");
 
     await exportStaticFilesForArticle(currentArticleId, article, token);
     await updateManifestForArticle(currentArticleId, article, token);
 
     const count = await window.rebuildSearchSource();
+
     setMessage(
-      `記事（${currentArticleId}）・一覧・全文字検索データ更新完了（登録記事数${count}件）` +
-      `GitHub Actions により公開サイトへデプロイ（1分前後、保存／更新はお待ちください。編集は可能。）`
+      `記事（${currentArticleId}）・一覧・全文検索用データの更新が完了しました（登録記事数 ${count}件）。` +
+      `　GitHub Actions により公開サイトへデプロイ中です（完了までは数分かかる場合があります）。`
     );
+    ok = true;
   } catch (e) {
     console.error("[updateArticle] error:", e);
-    setMessage(
-      `記事は更新できませんでした（全文検索用データ含む）: ${e.message || e}`,
-      true
-    );
+
+    // 409っぽいときは少し柔らかいメッセージに
+    const msg = String(e.message || e);
+    if (msg.includes("409")) {
+      setMessage(
+        "記事は更新できませんでした（全文検索用データ含む）。" +
+        "他の保存処理と競合した可能性があります。ページを再読み込みしてから、もう一度お試しください。",
+        true
+      );
+    } else {
+      setMessage(
+        `記事は更新できませんでした（全文検索用データ含む）: ${msg}`,
+        true
+      );
+    }
   } finally {
-    // ★ 忘れず解除
-    githubBusy = false;
+    finishGitSave(ok);
   }
 };
 
