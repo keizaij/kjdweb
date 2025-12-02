@@ -1,894 +1,1757 @@
-// ====== 設定（あなたの Hosting パスに合わせて書く） ======
-const MANIFEST_URL = '/_manifest.json';
-const SEARCH_SOURCE_URL = '/_search_source.json';
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>会員記事一覧</title>
+
+<!-- Firebase compat CDN (v9.6.10と揃える) -->
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
 
-// =========================
-// 記事リスト描画（号数グループ / フラット両対応）
-// =========================
-function renderArticles(list, options = {}) {
-  const container = document.getElementById("searchResults");
-  if (!container) return;
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-GBHXS22T9R"></script>
 
-  const mode = options.mode || "grouped"; // "grouped" or "flat"
+<script>
 
-  if (!Array.isArray(list) || list.length === 0) {
-    container.innerHTML =
-      '<div class="search-message">該当する記事はありません。</div>';
-    return;
-  }
-
-  if (mode === "flat") {
-    renderFlatList(container, list);
-  } else {
-    renderGroupedList(container, list);
-  }
-}
-
-// 号数ごとにまとめて表示
-function renderGroupedList(container, list) {
-  // 号数↓（新しい号が上）→ 同じ号の中は sequenceNum 昇順
-  const sorted = [...list].sort((a, b) => {
-    const ai = Number(getIssueInfo(a).issue || "0");
-    const bi = Number(getIssueInfo(b).issue || "0");
-    if (ai !== bi) return bi - ai;
-
-    const as = a.sequenceNum ?? 999;
-    const bs = b.sequenceNum ?? 999;
-    if (as !== bs) return as - bs;
-
-    return String(a.slug || "").localeCompare(String(b.slug || ""));
-  });
-
-  // 号数 + 日付でグループ化
-  const groups = [];
-  const map = new Map();
-
-  for (const art of sorted) {
-    const { issue, publishDate } = getIssueInfo(art);
-    const key = `${issue}|${publishDate}`;
-    let g = map.get(key);
-    if (!g) {
-      g = { issue, publishDate, items: [] };
-      map.set(key, g);
-      groups.push(g);
-    }
-    g.items.push(art);
-  }
-
-  const frag = document.createDocumentFragment();
-
-  for (const g of groups) {
-    const sec = document.createElement("section");
-    sec.className = "issue-group";
-
-    const h = document.createElement("h2");
-    h.className = "issue-group-header";
-    const issueLabel = g.issue ? `No.${g.issue}` : "";
-    const dateLabel = g.publishDate ? `(${g.publishDate})` : "";
-    h.textContent = `${issueLabel}${dateLabel}`;
-    sec.appendChild(h);
-
-    const ul = document.createElement("ul");
-    ul.className = "issue-group-list";
-
-    for (const art of g.items) {
-      const li = document.createElement("li");
-      li.className = "issue-group-item";
-
-      const a = document.createElement("a");
-      a.href = "#";
-      a.className = "article-link";
-
-      const slug = String(art.slug || art.articleId || "");
-      if (slug) a.dataset.slug = slug;
-
-      a.textContent = art.title || "";
-
-      li.appendChild(a);
-      ul.appendChild(li);
-    }
-
-    sec.appendChild(ul);
-    frag.appendChild(sec);
-  }
-
-  container.innerHTML = "";
-  container.appendChild(frag);
-}
-
-// 検索・カテゴリ別用のフラット表示
-function renderFlatList(container, list) {
-  const frag = document.createDocumentFragment();
-
-  for (const art of list) {
-    const { issue, publishDate } = getIssueInfo(art);
-
-    const row = document.createElement("div");
-    row.className = "article-row";
-
-    const a = document.createElement("a");
-    a.href = "#";
-    a.className = "article-link";
-    const slug = String(art.slug || art.articleId || "");
-    if (slug) a.dataset.slug = slug;
-    a.textContent = art.title || "";
-
-    const meta = document.createElement("span");
-    meta.className = "issue-label";
-    const issueLabel = issue ? `No.${issue}` : "";
-    const dateLabel = publishDate ? `(${publishDate})` : "";
-    meta.textContent = `【${issueLabel}${dateLabel}】`;
-
-    row.appendChild(a);
-    row.appendChild(meta);
-    frag.appendChild(row);
-  }
-
-  container.innerHTML = "";
-  container.appendChild(frag);
-}
-
-// 記事から号数と日付を取り出してラベル用に整形
-function getIssueInfo(article) {
-  // 号数は基本 issue フィールド、なければ slug 先頭4桁
-  let issue = (article.issue || "").toString().replace(/\D/g, "");
-  if (!issue && article.slug) issue = String(article.slug).slice(0, 4);
-
-  const publishDate = article.publishDate || ""; // "2025/08/08" 想定
-
-  return { issue, publishDate };
-}
-
-// =========================
-// カテゴリプルダウンの構築
-// =========================
-function populateCategoryFilter(categoryMap) {
-  const select = document.getElementById("categoryFilter");
-  if (!select) return;
-
-  // 先頭の「すべて」だけ残して中身を作り直す
-  let firstOption = select.options[0] || null;
-  select.innerHTML = "";
-
-  if (!firstOption) {
-    firstOption = document.createElement("option");
-    firstOption.value = "all";
-    firstOption.textContent = "すべて";
-  } else {
-    firstOption.value = "all";
-    firstOption.textContent = firstOption.textContent || "すべて";
-  }
-  select.appendChild(firstOption);
-
-  const entries = Object.entries(categoryMap || {});
-  // 名前順（日本語）でソート
-  entries.sort((a, b) => a[1].localeCompare(b[1], "ja"));
-
-  for (const [id, name] of entries) {
-    const opt = document.createElement("option");
-    opt.value = id;
-    opt.textContent = name;
-    select.appendChild(opt);
-  }
-}
-
-// =========================
-// 年プルダウンの構築（publishDate 先頭4桁から）
-// =========================
-function populateYearFilterFromArticles(articles) {
-  const select = document.getElementById("yearFilter");
-  if (!select) return;
-
-  // 現在選択されている値を一応覚えておく
-  const current = select.value || "all";
-
-  const yearsSet = new Set();
-
-  (articles || []).forEach(a => {
-    const d = a.publishDate || a.date || "";
-    if (!d) return;
-    const y = String(d).slice(0, 4).replace(/\D/g, "");
-    if (y.length === 4) {
-      yearsSet.add(y);
-    }
-  });
-
-  // 年が1つも取れなければ何もしない（初期状態"すべての年"のまま）
-  if (!yearsSet.size) return;
-
-  // 「すべての年」＋ 年降順
-  const years = Array.from(yearsSet).sort((a, b) => b.localeCompare(a, "ja"));
-
-  select.innerHTML = "";
-
-  const optAll = document.createElement("option");
-  optAll.value = "all";
-  optAll.textContent = "すべての年";
-  select.appendChild(optAll);
-
-  years.forEach(y => {
-    const opt = document.createElement("option");
-    opt.value = y;
-    opt.textContent = y + "年";
-    select.appendChild(opt);
-  });
-
-  // 以前の選択がまだ有効なら維持する
-  if (current !== "all" && years.includes(current)) {
-    select.value = current;
-  } else {
-    select.value = "all";
-  }
-}
+// ✅ 旧初期化も無効化
+window.initFirestoreLoader = () => console.info("[init] Firestore init DISABLED");
 
 
-// =========================
-// 記事一覧ローダー
-// =========================
-async function loadCategoriesThenArticles() {
-  const setMsg = (html) => {
-    const el = document.getElementById("searchResults");
-    if (el) el.innerHTML = html;
+</script>
+
+
+
+
+
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-GBHXS22T9R');
+</script>
+
+<script>
+window.addEventListener('error', e => {
+  console.error('[FATAL]', e.error || e.message);
+  const el = document.getElementById('initialLoadingMessage');
+  if (el) el.textContent = `スクリプトエラー: ${e.message}`;
+});
+window.addEventListener('unhandledrejection', e => {
+  console.error('[UNHANDLED]', e.reason);
+  const el = document.getElementById('initialLoadingMessage');
+  if (el) el.textContent = `未処理エラー: ${e.reason?.message || e.reason}`;
+});
+</script>
+
+
+<!-- ★ここに “唯一の” Firebase初期化ブロック を置く（スタイルより前） -->
+<script>
+(() => {
+  "use strict";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAJT3EnF4s6kfU6RuC9nJvOrs9FtG_RMR0",
+    authDomain: "economic-journals-digital.firebaseapp.com",
+    projectId: "economic-journals-digital",
+    storageBucket: "economic-journals-digital.appspot.com",
+    messagingSenderId: "1032175762907",
+    appId: "1:1032175762907:web:e46fca907bb52c9b5fbbfe"
   };
-  setMsg('<div class="search-message">記事を読み込み中...</div>');
 
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+
+  window.auth = firebase.auth();
+  window.db   = firebase.firestore();
+  window.LOGIN_URL = 'login.html';
+
+  // ★ グローバル記事データは window.* に
+  window.allArticles = [];
+  window.categoryMap = {};
+  let _authFired = false;
+
+  window.firebaseReady = Promise.resolve();
+})();
+</script>
+
+
+
+   <style>
+/* ========== Base (PC) ========== */
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --header-height:40px;
+  --filter-bar-height:40px;
+  --content-padding-top:10px;
+  --article-spacing:5px;
+
+  /* 広告共通 */
+  --ad-drawer-z:1200;
+  --ad-gap:8px;
+  --ad-pad:8px;
+  --ad-h:72px; /* 広告の高さ（PC基準）*/
+}
+
+body{font-family:Arial,sans-serif;font-size:15px;background:#f4f4f4;color:#333;}
+.fixed-container{position:sticky;top:0;z-index:1000;}
+
+/* Header */
+.header-bar{height:var(--header-height);background:#002b5c;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:0 20px;flex-wrap:nowrap;}
+.header-bar .left-section{display:flex;align-items:center;gap:10px;}
+.header-bar .logo-container{display:flex;align-items:center;min-width:50px;}
+.header-bar .logo-container img{height:25px !important;width:auto !important;object-fit:contain;}
+.header-bar .tagline{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left;flex-grow:0;padding:0;transform:none;}
+.header-bar .top-links{display:flex;align-items:center;min-width:50px;justify-content:flex-end;}
+.header-bar .top-links a{color:#fff;text-decoration:none;border:.3px solid #fff;padding:.5px 3px;border-radius:2px;font-size:12px;margin-left:5px;}
+
+/* Filter bar */
+.filter-bar{background:#fff;box-shadow:0 2px 5px rgba(0,0,0,.1);display:flex;align-items:center;padding:0 20px;flex-wrap:wrap;height:auto;}
+.filter-bar-content{display:flex;align-items:flex-start;flex-wrap:wrap;justify-content:flex-start;gap:15px;width:100%;padding:10px 0;}
+#searchInput{width:250px;padding:3px 10px;font-size:14px;}
+.filter-bar button,.filter-bar select{padding:3px 10px;font-size:14px;white-space:nowrap;}
+
+/* Layout */
+main{padding-left:45px;padding-right:20px;padding-top:var(--content-padding-top);}
+
+/* List */
+
+.article-item a{text-decoration:none;color:#0056b3;cursor:pointer;}
+.article-item a:hover{text-decoration:underline;}
+.article-item{padding:5px 0;}
+
+.search-message{text-align:center;margin-top:20px;font-size:16px;color:#555;}
+
+/* Page top */
+#page-top{position:fixed;bottom:-50px;left:20px;background:rgba(0,43,92,.8);color:#fff;padding:8px 12px;border:none;cursor:pointer;transition:bottom .3s ease;font-size:10px;border-radius:50%;}
+#page-top.show{bottom:20px;}
+
+.auto-issue-link.pending{ color:#9ca3af; pointer-events:none; text-decoration:none; }
+
+
+/* Modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:2000;justify-content:center;align-items:center;}
+.modal-content{background:#fff;padding:20px;border-radius:8px;width:90%;max-width:900px;max-height:90%;overflow-y:auto;position:relative;}
+.close-button{position:absolute;top:10px;right:15px;font-size:24px;font-weight:bold;color:#aaa;cursor:pointer;}
+.close-button:hover{color:#555;}
+.article-loading-message{text-align:center;padding:50px;}
+
+
+/* 記事本文共通 */
+#article-modal .article-body { line-height: 1.9; font-size: 16px; }
+#article-modal .article-body img { max-width: 100%; height: auto; display: block; margin: 1.2em auto; }
+#article-modal .article-body h1,
+#article-modal .article-body h2,
+#article-modal .article-body h3 { line-height: 1.4; margin: 1.2em 0 .6em; }
+#article-modal .article-body p { margin: 1em 0; }
+#article-modal .article { color:#111; } /* 全体の文字色をサイト基準に合わせるならここで */
+
+
+#articleModal .modal-container{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;max-width:800px;margin:auto;background:#fff;padding:30px;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);line-height:1.6;}
+#articleModal .header-section{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:5px;border-bottom:1px solid #eee;}
+#articleModal .meta-info,#articleModal .logo-text{font-size:.9em;color:#7f8c8d;}
+#articleModal .title-section{text-align:center;margin-bottom:30px;}
+#articleModal .main-title{font-size:1.8em;font-weight:700;color:#2c3e50;margin:0 0 10px;}
+#articleModal .subtitle{font-size:1.5em;font-weight:400;color:#2c3e50;margin:0;}
+#articleModal .content{margin-top:20px;line-height:1.8;font-size:1.1em;}
+#articleModal .content p{margin:0;}
+#articleModal .content img{max-width:100%;height:auto;display:block;margin:10px auto;pointer-events:none;}
+#articleModal .button-container{text-align:center;margin-top:30px;}
+#articleModal .back-button{background:#3498db;color:#fff;padding:10px 20px;border:none;border-radius:5px;cursor:pointer;font-size:1em;text-decoration:none;}
+#articleModal .back-button:hover{background:#2980b9;}
+
+/* Modal bottom ads (sticky) */
+#articleModal .ad-sticky{position:sticky;bottom:0;background:#fff;border-top:1px solid #eee;padding:8px;margin-top:20px;z-index:1;}
+#articleModal .ad-sticky .ad-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;}
+#articleModal .ad-sticky .ad{display:block;border-radius:6px;overflow:hidden;background:#fafafa;height:var(--ad-h);}
+#articleModal .ad-sticky .ad img{width:100%;height:100%;object-fit:contain;display:block;}
+
+/* Print: hide modal content */
+@media print{#articleModal .modal-content{display:none !important;}}
+
+/* New list (unchanged) */
+.new-list{background:#fff;border:1px solid #ddd;border-radius:4px;padding:10px;margin-bottom:var(--article-spacing);}
+.new-item{padding:5px 0;}
+.new-item a{text-decoration:none;color:#0056b3;font-weight:700;}
+.new-item a:hover{text-decoration:underline;}
+.new-badge{color:#d00;font-size:11px;border:1px solid #d00;padding:1px 4px;border-radius:3px;margin-right:6px;}
+.new-date{font-size:12px;color:#666;margin-left:6px;white-space:nowrap;}
+.item-meta{font-size:12px;color:#666;margin-left:6px;white-space:nowrap;}
+
+/* ========== Ad Drawer (共通) ========== */
+.ad-drawer{position:fixed;left:0;right:0;bottom:0;z-index:var(--ad-drawer-z);display:none;}
+.ad-drawer .inner{background:#fff;border-top:1px solid #ddd;box-shadow:0 -6px 18px rgba(0,0,0,.12);padding:var(--ad-pad);}
+.ad-drawer .header{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#666;margin-bottom:6px;}
+.ad-drawer .header .controls{display:none !important;} /* もっと見るを常に非表示 */
+
+/* グリッドは幅に応じて 1〜6 列へ自動調整（JS側で最大6件を供給） */
+.ad-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:var(--ad-gap);}
+.ad-grid .ad{display:block;border-radius:6px;overflow:hidden;background:#fff;height:var(--ad-h);}
+.ad-grid .ad img{width:100%;height:100%;object-fit:contain;display:block;}
+
+/* ========== Mobile overrides (最後に置く) ========== */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;}
+.mobile-mode{
+  --header-height:22px;
+  --content-padding-top:8px;
+  --ad-h:62px; /* モバイルの広告高さを少し低めに */
+}
+
+/* Header (mobile) */
+.mobile-mode .header-bar{height:var(--header-height);padding:0 12px;}
+.mobile-mode .header-bar .logo-container img{height:14px !important;}
+.mobile-mode .header-bar .tagline{font-size:clamp(12px,4.5vw,14px);}
+.mobile-mode .header-bar .top-links a{font-size:8px;padding:0;}
+
+/* Filter bar (mobile: 2段レイアウト) */
+.mobile-mode .filter-bar{padding:8px 10px;}
+.mobile-mode .filter-bar-content{
+  display:grid !important;
+  grid-template-columns:1fr auto auto;
+  grid-template-rows:auto auto;
+  grid-template-areas:
+    "q q btnSearch"
+    "year cat btnReset";
+  gap:8px;align-items:center;
+}
+.mobile-mode #searchInput{grid-area:q;width:100% !important;}
+.mobile-mode .filter-bar button[onclick^="search("]{grid-area:btnSearch;}
+.mobile-mode #yearFilter{grid-area:year;width:100% !important;}
+.mobile-mode #categoryFilter{grid-area:cat;width:100% !important;}
+.mobile-mode .filter-bar button[onclick^="resetSearch("]{grid-area:btnReset;}
+.mobile-mode .filter-bar button,.mobile-mode .filter-bar select{width:auto !important;font-size:11px;padding:6px 10px;}
+.mobile-mode .filter-bar-content > *{min-width:0;}
+
+/* List (mobile) */
+.mobile-mode main{padding-left:12px;padding-right:12px;}
+.mobile-mode details{padding:6px 8px;margin-bottom:4px;}
+.mobile-mode details[open] summary{margin-bottom:6px;}
+.mobile-mode .article-item{padding:4px 0;}
+.mobile-mode details[open] .article-item{padding-left:8px;}
+.mobile-mode .article-item a{font-size:14px;line-height:1;}
+.mobile-mode summary{font-size:15px;}
+
+/* Ad drawer & modal ads (mobile: 3列×2段固定) */
+.mobile-mode .ad-drawer .inner{padding:4px 8px 6px;}
+.mobile-mode .ad-drawer .header{margin-bottom:2px;padding:0;min-height:0;}
+.mobile-mode .ad-drawer .header span{line-height:1;font-size:11px;}
+
+.mobile-mode .ad-drawer .ad-grid,
+.mobile-mode #articleModal .ad-grid,
+.mobile-mode #articleModal .ad-sticky .ad-grid{
+  grid-template-columns:repeat(3,1fr) !important;
+  column-gap:8px;row-gap:4px;
+}
+.mobile-mode .ad-grid .ad{height:var(--ad-h);}
+.mobile-mode .ad-grid .ad img{object-fit:contain;}
+
+/* Modal (mobile) */
+.mobile-mode .close-button{font-size:22px;top:6px;right:10px;}
+.mobile-mode #articleModal .modal-content{width:98vw;padding:5px;}
+.mobile-mode #articleModal .main-title{font-size:clamp(18px,5.2vw,22px);}
+.mobile-mode #articleModal .subtitle{font-size:clamp(16px,4.6vw,20px);}
+.mobile-mode #articleModal .content{font-size:15px;line-height:1.5;}
+.mobile-mode #articleModal .ad-sticky{padding:6px 6px 4px;margin-top:10px;}
+
+/* ===== PC専用（mobile-mode 以外）：1x6 / 2x3 / 3x2 だけに固定 ===== */
+body:not(.mobile-mode) .ad-drawer .ad-grid,
+body:not(.mobile-mode) #articleModal .ad-grid,
+body:not(.mobile-mode) #articleModal .ad-sticky .ad-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr) !important; /* まずは 1段6列 */
+  column-gap: 10px !important;  /* PCは少し広め */
+  row-gap: 8px !important;
+}
+
+/* 6列が苦しくなってきたら → 2段3列 */
+@media (max-width: 1000px) {
+  body:not(.mobile-mode) .ad-drawer .ad-grid,
+  body:not(.mobile-mode) #articleModal .ad-grid,
+  body:not(.mobile-mode) #articleModal .ad-sticky .ad-grid {
+    grid-template-columns: repeat(3, 1fr) !important; /* 2段3列 */
+    column-gap: 10px !important;
+    row-gap: 8px !important;
+  }
+}
+
+/* 3列を“ギリまで”維持するために、さらに幅が狭い帯では余白を圧縮 */
+@media (max-width: 700px) {
+  body:not(.mobile-mode) .ad-drawer .inner { padding-left: 8px; padding-right: 8px; }
+  body:not(.mobile-mode) .ad-drawer .ad-grid,
+  body:not(.mobile-mode) #articleModal .ad-grid,
+  body:not(.mobile-mode) #articleModal .ad-sticky .ad-grid {
+    column-gap: 8px !important;
+    row-gap: 6px !important;
+  }
+}
+
+/* もう本当に入らない幅になったらだけ → 3段2列 */
+@media (max-width: 500px) {
+  body:not(.mobile-mode) .ad-drawer .ad-grid,
+  body:not(.mobile-mode) #articleModal .ad-grid,
+  body:not(.mobile-mode) #articleModal .ad-sticky .ad-grid {
+    grid-template-columns: repeat(2, 1fr) !important; /* 3段2列 */
+    column-gap: 8px !important;
+    row-gap: 6px !important;
+  }
+  body:not(.mobile-mode) .ad-drawer .inner { padding-left: 6px; padding-right: 6px; }
+}
+
+/* 高さ・画像フィットは据え置き（必要なら --ad-h を好みで） */
+body:not(.mobile-mode) .ad-grid .ad {
+  height: var(--ad-h, 72px);
+}
+body:not(.mobile-mode) .ad-grid .ad img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+
+/* === Anti-copy（記事モーダルのみ）=== */
+#articleModal .modal-content,
+#articleModal .modal-content * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  caret-color: transparent; /* キャレット非表示 */
+}
+/* リンクはクリック可のまま */
+#articleModal .modal-content a { pointer-events: auto; }
+
+/* DevTools検知時は本文をブラー */
+body.devtools-open #articleModal .modal-content .content {
+  filter: blur(10px);
+  transition: filter .2s ease;
+}
+
+/* モーダル表示中は“印刷すると白紙” */
+@media print {
+  body.modal-open * { display: none !important; }
+  /* 完全に白紙でOK。メッセージ表示したいならここに擬似要素で出せる */
+}
+
+/* ▼号数ごとのグループ表示用 */
+.issue-group {
+  margin-bottom: 1.5rem;
+}
+
+.issue-group-header {
+  font-weight: bold;
+  margin: 0 0 0.25rem;
+  font-size: 15px;
+}
+
+.issue-group-header .issue-no {
+  margin-right: 0.25em;
+}
+
+.issue-group-header .issue-date {
+  color: #555;
+  font-size: 13px;
+}
+
+.issue-group-list {
+  margin: 0 0 0.75rem 1.5em;
+  padding: 0;
+  list-style: none;
+}
+
+.issue-group-item {
+  margin: 0.15rem 0;
+}
+
+.issue-group-item a {
+  text-decoration: none;
+  color: #0044aa;
+}
+
+.issue-group-item a:hover {
+  text-decoration: underline;
+}
+
+/* ▼検索結果などフラット表示用 */
+.article-row {
+  margin: 0.25rem 0;
+}
+
+.article-row a {
+  text-decoration: none;
+  color: #0044aa;
+}
+
+.article-row a:hover {
+  text-decoration: underline;
+}
+
+.article-row .issue-label {
+  margin-left: 0.5em;
+  font-size: 12px;
+  color: #555;
+}
+
+
+
+</style>
+
+
+
+
+</head>
+<body>
+    <div class="fixed-container">
+        <div class="header-bar">
+            <div class="left-section">
+                <div class="logo-container">
+                    <a href="http://www.economicjournal.co.jp/" target="_blank">
+                         <img src="https://lh3.googleusercontent.com/d/1k-sttTgkKJv6eZE9X2N34fSQFjXWpH8u" alt="economic jornal">
+                    </a>
+                </div>
+                <div class="tagline">
+                    Members Page
+                </div>
+            </div>
+            <div class="top-links">
+                <a href="#" id="logoutLink" onclick="doLogout(event)">ログアウト</a>
+ </div>
+        </div>
+        <div class="filter-bar">
+            <div class="filter-bar-content">
+                <input type="text" id="searchInput" placeholder="キーワードで検索"
+       onkeyup="if(event.key === 'Enter') window.searchArticles()">
+                <select id="yearFilter" onchange="filterResults()">
+                    <option value="all">すべての年</option>
+                </select>
+                <select id="categoryFilter" onchange="filterResults()">
+                    <option value="all">カテゴリ別</option>
+                </select>
+                <button onclick="window.searchArticles()">検索</button>
+                <button onclick="window.resetSearch()">リセット</button>
+            </div>
+        </div>
+    </div>
+    <main>
+        <div id="searchResults">
+            <div class="auth-message" id="initialLoadingMessage">認証を確認中...</div>
+        </div>
+    </main>
+
+<!-- 画面下 固定広告ドロワー -->
+<div id="adDrawer" class="ad-drawer" aria-label="広告">
+  <div class="inner">
+    <div class="header">
+      <span>広告</span>
+      <div class="controls">
+        <button id="adExpandBtn">＋もっと表示</button>
+        <button id="adCollapseBtn" style="display:none;">－閉じる</button>
+      </div>
+    </div>
+    <div class="ad-grid" id="adGrid"></div>
+  </div>
+</div>
+
+
+    <button id="page-top">TOP</button>
+
+<script>
+
+
+const ISSUE_PREFIX = 'No.';
+
+
+function issueLabel(raw, pad = 4) {
+  if (raw == null) return '';
+  const digits = String(raw).replace(/\D/g, ''); // 数字だけ抽出（No.2525 → 2525）
+  if (!digits) return '';
+  const padded = pad ? digits.padStart(pad, '0') : digits;
+  return `${ISSUE_PREFIX} ${padded}`;
+}
+
+// "YYYY/MM/DD" or "YYYY-MM-DD" → "M/D"
+function formatMonthDay(ymd){
+  if (!ymd) return '';
+  const s = String(ymd).replace(/-/g, '/');
+  const m = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+  if (!m) return '';
+  const mm = String(parseInt(m[2], 10));
+  const dd = String(parseInt(m[3], 10));
+  return `${mm}/${dd}`;
+}
+
+
+
+async function ensureMiniSearchLoaded(timeoutMs = 8000) {
+  const start = Date.now();
+  while (!window.MiniSearch) {
+    await new Promise(r => setTimeout(r, 100));
+    if (Date.now() - start > timeoutMs) {
+      console.warn('[IDX] MiniSearch not loaded yet');
+      return false;
+    }
+  }
+  return true;
+}
+
+</script>
+
+<script>
+
+    // --- ログアウト関数 ---
+    function doLogout(event) {
+        event.preventDefault();
+        const confirmLogout = confirm('ログアウトしますか？');
+        if (confirmLogout) {
+            auth.signOut().then(() => {
+                // ログアウト成功後、onAuthStateChangedが検知してログインページへリダイレクトされる
+                console.log('ログアウト成功');
+            }).catch((error) => {
+                console.error("ログアウト中にエラーが発生しました:", error);
+                alert("ログアウトに失敗しました。");
+            });
+        }
+    }
+
+
+
+async function renderModalAds() {
   try {
-    // 1) カテゴリ辞書を読み込み
-    let categoryMap = {};
-    try {
-      const catRes = await fetch("/indexes/categories.json", {
-        cache: "no-store",
-      });
-      if (catRes.ok) {
-        categoryMap = await catRes.json();
-      }
-    } catch (e) {
-      console.warn("[INDEX] categories.json 読み込み失敗:", e);
+    const pool = await fetchAdsFor('article');
+
+    // リストで直近出している会社は外す（基本的に別の6社に）
+    const listState = rr_getState('list');
+    const exclude = Array.isArray(listState.currentCompanies) ? listState.currentCompanies : [];
+
+    const picked = nextBatchFor('article', pool, { count: AD_SLOTS, excludeCompanies: exclude });
+
+    const grid = document.getElementById('modalAdGrid');
+    if (grid && picked.length) {
+      grid.innerHTML = picked.map(a => `
+        <a class="ad" href="${a.clickUrl || '#'}" target="_blank" rel="noopener">
+          <img src="${a.imageUrl}" alt="${(a.alt||'').replace(/"/g,'&quot;')}" loading="lazy">
+        </a>
+      `).join('');
     }
-    window.categoryMap = categoryMap;
-    console.log("[INDEX] categoryMap =", categoryMap);
-    populateCategoryFilter(categoryMap);
+  } catch (e) {
+    console.warn('[ads-modal] load error', e);
+  }
+}
 
-    // 2) 記事一覧の候補URL（今はマニフェスト 1 本だけ）
-    const candidateListUrls = ["/_manifest.json"]; 
 
-    // 3) 最初に成功した一覧 JSON を採用
-    let rawList = null;
-    let fromManifest = false;
-    let usedUrl = "";
 
-    for (const url of candidateListUrls) {
-      try {
-        const res = await fetch(url, { cache: "no-store" });
-        if (!res.ok) continue;
+function enhanceArticleLinks(scope = document) {
+  const root = scope.querySelector('.content') || scope;
 
-        const txt = await res.text();
-        if (txt.trim().startsWith("<")) continue; // HTML ならスキップ
-        const json = JSON.parse(txt);
+  root.querySelectorAll('a[href], a[data-article-id]').forEach(a => {
+    const rawHref = a.getAttribute('href') || '';
+    const dataId  = a.dataset.articleId;
 
-        // a) 通常の articles 配列
-        if (Array.isArray(json.articles)) {
-          rawList = json.articles;
-          usedUrl = url;
-          break;
-        }
-        // b) items / list / data など名前違い
-        if (Array.isArray(json.items)) {
-          rawList = json.items;
-          usedUrl = url;
-          break;
-        }
-        if (Array.isArray(json.list)) {
-          rawList = json.list;
-          usedUrl = url;
-          break;
-        }
-        if (Array.isArray(json.data)) {
-          rawList = json.data;
-          usedUrl = url;
-          break;
-        }
-        // c) マニフェスト形式（個別ファイルの配列）
-        if (Array.isArray(json.files)) {
-          rawList = json.files;
-          usedUrl = url;
-          fromManifest = true;
-          break;
-        }
-        if (Array.isArray(json.entries)) {
-          rawList = json.entries;
-          usedUrl = url;
-          fromManifest = true;
-          break;
-        }
-      } catch (e) {
-        console.warn("[INDEX] 一覧候補の取得失敗:", url, e);
-      }
+    // 1) #open:<docId> / data-article-id で内部記事を開く
+    let targetId = dataId || (rawHref.startsWith('#open:') ? rawHref.slice(6) : null);
+
+    // 2) #issue:<number> なら号数から docId を引く
+    if (!targetId && rawHref.startsWith('#issue:')) {
+      const no = rawHref.slice(7).replace(/\D/g,'');
+      const hit = (window.allArticles || []).find(a => String(a.issueNumber||'').replace(/\D/g,'') === no);
+      if (hit) targetId = hit.articleId;
     }
 
-    if (!rawList) {
-      throw new Error("記事一覧の取得に失敗（候補全滅）");
-    }
-
-    // 4) マニフェスト形式なら title 等を整形
-    let articles = [];
-    if (fromManifest) {
-      // 期待する要素の形：
-      //   { slug:"215301", title:"...", path:"/build_plain_articles/215301.json",
-      //     publishDate:"YYYY/MM/DD", categoryIds:["..."] }
-      articles = rawList.map((x) => {
-        const slug = String(x.slug || x.articleId || x.id || "").trim();
-        const path =
-          x.path || (slug ? `/build_plain_articles/${slug}.json` : "");
-        const catNames = (x.categoryIds || []).map(
-          (id) => (categoryMap?.[id] || id)
-        );
-        return {
-          slug,
-          articleId: x.articleId || slug || "",
-          title: x.title || "",
-          publishDate: x.publishDate || x.date || "",
-          categoryIds: x.categoryIds || [],
-          category: catNames.join(", "),
-          _plainPath: path,
-        };
-      });
-    } else {
-      // ふつうの集約JSONだった場合
-      articles = rawList.map((a) => {
-        const slug = String(a.slug || a.articleId || a.id || "").trim();
-        const catNames = (a.categoryIds || []).map(
-          (id) => (categoryMap?.[id] || id)
-        );
-        return {
-          ...a,
-          slug,
-          articleId: a.articleId || slug || "",
-          category: catNames.join(", "),
-        };
-      });
-    }
-
-    if (!articles.length) {
-      setMsg(
-        '<div class="search-message">現在、公開されている記事はありません。</div>'
-      );
+    if (targetId) {
+      a.addEventListener('click', e => {
+        e.preventDefault(); e.stopPropagation();
+        showArticlePopup(targetId);     // ← 既存の関数を再利用
+      }, { passive:false });
+      a.setAttribute('href', '#');      // 予防：ページ遷移しない
       return;
     }
 
-    window.allArticles = articles;
-
-    // 年フィルタを articles から構築
-    try {
-      populateYearFilterFromArticles(articles);
-    } catch (e) {
-      console.warn("[INDEX] populateYearFilterFromArticles error:", e);
+    // 3) 外部リンクは新規タブで安全に
+    if (/^https?:\/\//i.test(rawHref)) {
+      a.setAttribute('target', '_blank');
+      a.setAttribute('rel', 'noopener');
     }
-
-    // 最初は号数グループ表示
-    renderArticles(articles, { mode: "grouped" });
-
-    console.log("[INDEX] ok from:", usedUrl, "count=", articles.length);
-
-  } catch (err) {
-    console.error("[INDEX] loadCategoriesThenArticles failed:", err);
-    setMsg(
-      '<div class="search-message">記事データの読み込みに失敗しました。</div>'
-    );
-  }
-}
-
-// =========================
-// 年・カテゴリ・全文検索（静的インデックス）
-// =========================
-
-// 静的インデックス（/indexes/search-index.json）をキャッシュ
-let staticSearchIndex   = null;
-let staticSearchLoaded  = false;
-let staticSearchLoading = false;
-
-/**
- * 年・カテゴリの条件に合う記事一覧を allArticles から絞り込む
- */
-function filterBaseArticlesByYearCategory() {
-  const yearSel     = document.getElementById("yearFilter");
-  const categorySel = document.getElementById("categoryFilter");
-
-  const year     = yearSel ? yearSel.value : "all";
-  const category = categorySel ? categorySel.value : "all";
-
-  let base = Array.isArray(window.allArticles) ? [...window.allArticles] : [];
-
-  // 年フィルタ（publishDate 先頭4桁）
-  if (year !== "all") {
-    base = base.filter((a) => {
-      const y = a.publishDate ? String(a.publishDate).slice(0, 4) : "";
-      return y === year;
-    });
-  }
-
-  // カテゴリフィルタ
-  if (category !== "all") {
-    base = base.filter((a) => {
-      // categoryIds 配列優先
-      if (Array.isArray(a.categoryIds) && a.categoryIds.includes(category)) {
-        return true;
-      }
-      // category の文字列にも一応対応
-      if (a.category) {
-        const cats = String(a.category)
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean);
-        return cats.includes(category);
-      }
-      return false;
-    });
-  }
-
-  return { base, year, category };
-}
-
-// =========================
-// /indexes/search-index.json または /_search_source.json を読み込み
-// 形式は { docs:[...] } / { items:[...] } / [...] / { key: obj, ... } のどれでもOK
-// =========================
-async function loadStaticSearchIndex() {
-  if (staticSearchLoaded && staticSearchIndex) return staticSearchIndex;
-
-  if (staticSearchLoading) {
-    while (staticSearchLoading) {
-      await new Promise((r) => setTimeout(r, 50));
-    }
-    return staticSearchIndex;
-  }
-
-  staticSearchLoading = true;
-
-  try {
-    // ★ここだけパスを合わせる
-    const res = await fetch("/build_plain_articles/_search_source.json", { cache: "no-store" });
-    if (!res.ok) {
-      throw new Error("_search_source.json が見つかりません");
-    }
-    const json = await res.json();
-
-    // 🔹 オブジェクトの中の文字列を全部つなげて1本のテキストにするヘルパー
-    const collectStrings = (v) => {
-      const buf = [];
-      const walk = (x) => {
-        if (x == null) return;
-        if (typeof x === "string") {
-          buf.push(x);
-        } else if (Array.isArray(x)) {
-          for (const y of x) walk(y);
-        } else if (typeof x === "object") {
-          for (const k in x) {
-            if (Object.prototype.hasOwnProperty.call(x, k)) {
-              walk(x[k]);
-            }
-          }
-        }
-      };
-      walk(v);
-      return buf.join(" ");
-    };
-
-    let docsArray;
-
-    // ★ここを最優先：articles 配列があればそれを使う
-    if (Array.isArray(json?.articles)) {
-      docsArray = json.articles.map((d, idx) => {
-        const rawId = String(d.slug || d.articleId || d.id || idx);
-        const numericId = rawId.replace(/\D/g, "") || rawId;
-        return {
-          ...d,
-          id: numericId,
-          slug: d.slug || numericId,
-          articleId: d.articleId || numericId,
-          text: d.text || collectStrings(d),
-        };
-      });
-    } else if (Array.isArray(json?.docs)) {
-      // 形式: { "docs": [ { slug, articleId, text, ... }, ... ] }
-      docsArray = json.docs.map((d, idx) => {
-        const rawId = String(d.slug || d.articleId || d.id || idx);
-        const numericId = rawId.replace(/\D/g, "") || rawId;
-        return {
-          ...d,
-          id: numericId,
-          slug: d.slug || numericId,
-          articleId: d.articleId || numericId,
-          text: d.text || collectStrings(d),
-        };
-      });
-    } else if (Array.isArray(json)) {
-      // 形式: [ { slug, articleId, text, ... }, ... ]
-      docsArray = json.map((d, idx) => {
-        const rawId = String(d.slug || d.articleId || d.id || idx);
-        const numericId = rawId.replace(/\D/g, "") || rawId;
-        return {
-          ...d,
-          id: numericId,
-          slug: d.slug || numericId,
-          articleId: d.articleId || numericId,
-          text: d.text || collectStrings(d),
-        };
-      });
-    } else if (json && typeof json === "object") {
-      // 汎用フォールバック: { "215303": { ... }, ... } みたいな場合用
-      docsArray = Object.entries(json).map(([id, value]) => {
-        const rawId = String(id);
-        const numericId = rawId.replace(/\D/g, "") || rawId;
-        return {
-          id: numericId,
-          slug: numericId,
-          articleId: numericId,
-          text: collectStrings(value),
-        };
-      });
-    } else {
-      docsArray = [];
-    }
-
-    staticSearchIndex = docsArray;
-    staticSearchLoaded = true;
-
-    console.log(
-      "[SEARCH] static index loaded from /_search_source.json. docs =",
-      staticSearchIndex.length
-    );
-    if (staticSearchIndex.length > 0) {
-      console.log("[SEARCH] sample doc =", staticSearchIndex[0]);
-    }
-
-    return staticSearchIndex;
-  } finally {
-    staticSearchLoading = false;
-  }
-}
-
-// クエリの正規化（とりあえず trim のみ）
-function normalizeQuery(q) {
-  return (q || "").trim();
-}
-
-// 日本語2文字でもまとめて扱うシンプル版（スペースで分割）
-function simpleTokenize(str) {
-  const s = String(str || "").trim();
-  if (!s) return [];
-  // 全角スペースも含めて区切る
-  return s
-    .split(/[ \u3000]+/)
-    .map(t => t.trim())
-    .filter(Boolean);
+  });
 }
 
 
-/**
- * 年・カテゴリ・キーワードを総合して検索→描画
- */
-async function doSearchAndRender() {
-  const searchBox = document.getElementById("searchInput");
-  const yearSel   = document.getElementById("yearFilter");
-  const catSel    = document.getElementById("categoryFilter");
-  const resultEl  = document.getElementById("searchResults");
 
-  const query = normalizeQuery(searchBox ? searchBox.value : "");
-  const year  = (yearSel ? yearSel.value : "all").trim();
-  const cat   = (catSel ? catSel.value : "all").trim();
+</script>
 
-  // まずは年・カテゴリだけで絞り込み
-  const { base } = filterBaseArticlesByYearCategory();
+<script>
 
-  // 🔹クエリが空なら、年&カテゴリのみ
-  if (!query) {
-    const isYearSpecific = year !== "all";
-    const isCatSpecific  = cat  !== "all";
 
-    let mode = "grouped";
-    if (isYearSpecific || isCatSpecific) {
-      mode = "flat";
+
+
+
+// 一覧用：<br> / \n / 実改行 / &nbsp; / 全角スペース などを除去し、余計な空白を詰めて1行に整形
+function oneLineTitle(raw) {
+  if (!raw) return '';
+  return String(raw)
+    .replace(/&lt;\s*br\s*\/?&gt;/gi, ' ') // エスケープ済み <br> → 空白
+    .replace(/<\s*br\s*\/?>/gi, ' ')       // 実際の <br> → 空白
+    .replace(/\\n/g, ' ')                  // 文字列の \n → 空白
+    .replace(/\r?\n/g, ' ')                // 実際の改行 → 空白
+    .replace(/&nbsp;/gi, ' ')              // &nbsp; → 空白
+    .replace(/\u00A0/g, ' ')               // NBSP → 空白
+    .replace(/\u3000/g, ' ')               // 全角スペース → 半角空白
+    .replace(/<\/?[^>]+>/g, ' ')           // 念のため他のタグも除去
+    // --- 文字詰め（空白の不要箇所を削る）---
+    .replace(/\s*([、。，．：；／？！）」』】〉》\)\]\}])/g, '$1') // 閉じ系句読点の直前空白を削除
+    .replace(/([（「『【〈《\(\[\{])\s*/g, '$1')                  // 開き系の直後空白を削除
+    .replace(/\s*\/\s*/g, '/')                                    // スラッシュの前後空白を削除
+    .replace(/\s{2,}/g, ' ')                                      // 連続空白→1個
+    .trim();
+}
+
+// ポップアップ用：安全にエスケープした上で、<br> / \n / 文字列の \n を改行として復元
+function renderWithManualBreaks(raw) {
+  if (!raw) return '';
+  const escaped = String(raw)
+    .replace(/&/g, '&amp;')  // まず危険な記号を全部エスケープ
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  return escaped
+    .replace(/&lt;br\s*\/?&gt;/gi, '<br>') // 文字列内の "<br>" を改行化
+    .replace(/\\n/g, '<br>')               // 文字列の \n を改行化（クォート内の \n）
+    .replace(/\r?\n/g, '<br>');            // 実際の改行も改行化
+}
+
+
+// CJKは1文字単位、英数は単語ごとに分割して行折返しを安定化
+function plainTextFromHtml(html = "") {
+  if (!html) return "";
+  // <style>～</style> を丸ごと除去
+  let body = String(html).replace(/^[\s\S]*?<\/style>/i, "");
+  // <div class="article-content"> ～ </div> の中身だけを抽出（あれば）
+  body = body.replace(
+    /^\s*<div[^>]*class=["'][^"']*article-content[^"']*["'][^>]*>([\s\S]*?)<\/div>\s*$/i,
+    "$1"
+  );
+
+  const div = document.createElement("div");
+  div.innerHTML = body;
+  return (div.textContent || "")
+    .replace(/\u00A0/g, " ")      // nbsp → 半角スペース
+    .replace(/\u3000/g, " ")      // 全角スペース → 半角
+    .replace(/\s{2,}/g, " ")      // 連続空白 → 1個
+    // 文字詰め（空白の不要箇所を削る）
+    .replace(/\s*([、。，．：；／？！）」』】〉》\)\]\}])/g, "$1") // 閉じ系直前の空白を削除
+    .replace(/([（「『【〈《\(\[\{])\s*/g, "$1")                  // 開き系直後の空白を削除
+    .replace(/\s*\/\s*/g, "/")                                   // スラッシュ前後の空白を削除
+    .trim();
+}
+
+// 改行コードや <br> を可視改行に（ポップアップ用）
+function convertBrToNewline(str = '') {
+  if (!str) return '';
+  return String(str)
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/\r\n?/g, '\n');
+}
+
+
+
+
+
+// === Unicode property escape を使わない CJK 定義 ===
+// 漢字: U+3400-9FFF, 互換: U+F900-FAFF
+// ひらがな: U+3040-309F, カタカナ: U+30A0-30FF, 片拡張: U+31F0-31FF, 半角カナ: U+FF65-FF9F
+const RE_CJKLIKE_GLOBAL = /[\u3400-\u9FFF\uF900-\uFAFF\u3040-\u309F\u30A0-\u30FF\u31F0-\u31FF\uFF65-\uFF9F]/g;
+const RE_CJKLIKE_SINGLE = /[\u3400-\u9FFF\uF900-\uFAFF\u3040-\u309F\u30A0-\u30FF\u31F0-\u31FF\uFF65-\uFF9F]/;
+const RE_NOT_CJK_ALNUM = /[^A-Za-z0-9\u3400-\u9FFF\uF900-\uFAFF\u3040-\u309F\u30A0-\u30FF\u31F0-\u31FF\uFF65-\uFF9F]+/g;
+const RE_TOKEN_OK       = /^[A-Za-z0-9\u3400-\u9FFF\uF900-\uFAFF\u3040-\u309F\u30A0-\u30FF\u31F0-\u31FF\uFF65-\uFF9F]+$/;
+
+
+
+
+// MiniSearch ヘルパ（重複定義があれば片方に統一）
+// --- MiniSearch helpers（このブロックは1セットだけにする） ---
+
+function tokenizeJa(str) {
+  if (window.TinySegmenter) {
+    const seg = new TinySegmenter();
+    return seg.segment(String(str)).filter(t => /\S/.test(t));
+  }
+  return String(str).split(/[\s、。．・,.\-\/\s]+/).filter(Boolean);
+}
+
+</script>
+
+<script>
+
+// ====== 設定 ======
+const MIN_ISSUE_TO_LINK = 1902; // 2020/04～ の下限
+
+// ====== 1) 「→ No.2153」などを本文内で自動リンク化 ======
+function linkifyIssueRefs(scope = document) {
+  const root = scope.querySelector('.content') || scope;
+
+  // TextNodeを歩いて 内は無視
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!node.nodeValue || !/No\.?\s*\d{3,4}/i.test(node.nodeValue)) return NodeFilter.FILTER_REJECT;
+      const p = node.parentElement;
+      if (!p || p.closest('a,code,pre,script,style')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
     }
-
-    renderArticles(base, { mode });
-
-    if (base.length === 0 && resultEl) {
-      resultEl.innerHTML =
-        '<div class="search-message">該当する記事はありません。</div>';
-    }
-    return;
-  }
-
-  // 🔹検索中メッセージ
-  if (resultEl) {
-    resultEl.innerHTML = '<div class="search-message">検索中...</div>';
-  }
-
-  // 🔹静的インデックス読み込み
-  let docs;
-  try {
-    docs = await loadStaticSearchIndex();
-  } catch (e) {
-    console.error("[SEARCH] 静的インデックス読み込み失敗:", e);
-    // フォールバック: タイトルだけで検索
-    const qLower = query.toLowerCase();
-    const fallback = base.filter((a) =>
-      (a.title || "").toLowerCase().includes(qLower)
-    );
-    renderArticles(fallback, { mode: "flat" });
-    if (!fallback.length && resultEl) {
-      resultEl.innerHTML =
-        '<div class="search-message">該当する記事はありません。</div>';
-    }
-    return;
-  }
-
-  const tokens = simpleTokenize(query);
-  if (!tokens.length) {
-    renderArticles(base, { mode: "flat" });
-    return;
-  }
-
-  // 🔹 docs の想定: { slug, articleId, text } の配列
-  const hits = [];
-  outer: for (const d of docs) {
-    const text = String(d.text || "").toLowerCase();
-    if (!text) continue; // 空テキストはスキップ
-    for (const t of tokens) {
-      if (!text.includes(t.toLowerCase())) {
-        continue outer;
-      }
-    }
-    hits.push(d);
-  }
-
-  // 🔹 今の年&カテゴリ条件に合う slug/ID だけに絞る
-  const allowedIds = new Set();
-  const idToArticle = new Map();
-
-  for (const a of base) {
-    const rawId = String(a.slug || a.articleId || "").trim();
-    if (!rawId) continue;
-
-    // そのままのID
-    allowedIds.add(rawId);
-    idToArticle.set(rawId, a);
-
-    // 数字だけのIDも許可（"215301.json" と "215301" のズレ吸収）
-    const numericId = rawId.replace(/\D/g, "");
-    if (numericId && numericId !== rawId) {
-      allowedIds.add(numericId);
-      if (!idToArticle.has(numericId)) {
-        idToArticle.set(numericId, a);
-      }
-    }
-  }
-
-  const finalList = [];
-  for (const d of hits) {
-    let id = String(d.slug || d.articleId || d.id || "").trim();
-    if (!id) continue;
-
-    let numericId = id.replace(/\D/g, "");
-
-    const candidates = [id];
-    if (numericId && numericId !== id) {
-      candidates.push(numericId);
-    }
-
-    let foundArticle = null;
-    for (const cid of candidates) {
-      if (allowedIds.has(cid)) {
-        foundArticle = idToArticle.get(cid);
-        if (foundArticle) break;
-      }
-    }
-
-    if (foundArticle) {
-      finalList.push(foundArticle);
-    }
-  }
-
-  // 🔹 もし全文インデックスではヒットしたのに ID がズレている場合
-  //    → タイトル・カテゴリの単純検索でフォールバック
-  if (!finalList.length) {
-    const qLower = query.toLowerCase();
-    const fallback = base.filter((a) => {
-      const t = String(a.title || "").toLowerCase();
-      const c = String(a.category || "").toLowerCase();
-      return t.includes(qLower) || c.includes(qLower);
-    });
-
-    renderArticles(fallback, { mode: "flat" });
-    if (!fallback.length && resultEl) {
-      resultEl.innerHTML =
-        '<div class="search-message">該当する記事はありません。</div>';
-    }
-    return;
-  }
-
-  renderArticles(finalList, { mode: "flat" });
-
-  if (!finalList.length && resultEl) {
-    resultEl.innerHTML =
-      '<div class="search-message">該当する記事はありません。</div>';
-  }}
-
-// ===============================
-// 記事一覧ロード本体 (GitHub _manifest.json)
-// ===============================
-
-// ★ここを「kjdweb-data のサイトURL」に差し替え
-const DATA_ORIGIN = "";
-const manifestUrl = "/_manifest.json";
-// 例： "https://kjdweb-data.web.app" や "https://data.example.com" など
-
-// ここから新しい loadArticles 本体
-async function loadArticles() {
-  console.log('[LOAD] start');
-
-  const res = await fetch('/_manifest.json', { cache: 'no-store' });
-  if (!res.ok) {
-    console.error('[LOAD] manifest HTTP error', res.status);
-    throw new Error('manifest load failed: ' + res.status);
-  }
-
-  const manifest = await res.json();
-
-  let items;
-
-  if (Array.isArray(manifest)) {
-    items = manifest;
-  } else if (Array.isArray(manifest.articles)) {
-    items = manifest.articles;
-  } else if (Array.isArray(manifest.items)) {
-    items = manifest.items;
-  } else if (manifest && typeof manifest === 'object') {
-    items = Object.values(manifest);
-  } else {
-    items = [];
-  }
-
-  console.log('[LOAD] manifest ok, items =', items.length);
-
-  if (!items.length) {
-    window.allArticles = [];
-    renderArticles([], { mode: 'default' });
-    return;
-  }
-
-  const now = new Date();
-  const NEW_DAYS = 14;
-
-  window.allArticles = items.map((raw) => {
-    const articleId =
-      raw.articleId ||
-      raw.slug ||
-      raw.id ||
-      String(raw.issue || raw.issueNumber || '');
-
-    const publishDate =
-      raw.publishDate ||
-      raw.date ||
-      raw.pub_date ||
-      '';
-
-    let isNew = false;
-    if (publishDate) {
-      const d = new Date(publishDate.replace(/-/g, '/'));
-      if (!isNaN(d)) {
-        const diff = (now - d) / (1000 * 60 * 60 * 24);
-        isNew = diff >= 0 && diff <= NEW_DAYS;
-      }
-    }
-
-    const catIds =
-      raw.categoryIds ||
-      raw.category_ids ||
-      (Array.isArray(raw.categories) ? raw.categories : []);
-    const catName =
-      raw.category ||
-      raw.categoryName ||
-      '';
-
-    return {
-      articleId,
-      slug: articleId,
-      title: raw.title || '(無題)',
-      publishDate,
-      issueNumber: raw.issue || raw.issueNumber || '',
-      category: catName,
-      categoryIds: catIds,
-      isNewArticle: !!(raw.isNewArticle ?? isNew),
-    };
   });
 
+  const targets = [];
+  while (walker.nextNode()) targets.push(walker.currentNode);
+
+  const RE = /(?:→\s*)?(No\.?\s*(\d{3,4}))/gi; // 例: "→ No.2153" / "No2153"
+  targets.forEach(node => {
+    const frag = document.createDocumentFragment();
+    const src = node.nodeValue;
+    let last = 0, m;
+    while ((m = RE.exec(src)) !== null) {
+      const before = src.slice(last, m.index);
+      if (before) frag.appendChild(document.createTextNode(before));
+
+      const num = parseInt(m[2], 10);
+      const label = `No. ${num}`;
+
+      if (num >= MIN_ISSUE_TO_LINK) {
+        // 既知なら articleId を、未登録なら pending として置く
+        const hit = (window.allArticles || []).find(a =>
+          String(a.issueNumber || '').replace(/\D/g,'') === String(num)
+        );
+
+        const a = document.createElement('a');
+        a.textContent = label;
+        a.href = `#issue:${num}`;
+        a.className = 'auto-issue-link' + (hit ? '' : ' pending');
+        if (hit) {
+          a.dataset.articleId = hit.articleId;
+        } else {
+          a.dataset.issue = String(num);
+          a.title = '準備中';
+        }
+        frag.appendChild(a);
+      } else {
+        // 下限未満はそのままテキストに戻す
+        frag.appendChild(document.createTextNode(m[1]));
+      }
+      last = RE.lastIndex;
+    }
+    const tail = src.slice(last);
+    if (tail) frag.appendChild(document.createTextNode(tail));
+    node.replaceWith(frag);
+  });
+}
+
+// ====== 2) 未登録(準備中)リンクを、登録済みなら即・有効化 ======
+function resolvePendingIssueLinks(scope = document) {
+  const root = scope.querySelector('.content') || scope;
+  root.querySelectorAll('a.auto-issue-link.pending').forEach(a => {
+    const num = a.dataset.issue || (a.textContent.match(/\d{3,4}/)||[])[0];
+    const hit = (window.allArticles || []).find(x =>
+      String(x.issueNumber || '').replace(/\D/g,'') === String(num)
+    );
+    if (hit) {
+      a.classList.remove('pending');
+      a.removeAttribute('title');
+      a.dataset.articleId = hit.articleId;
+    }
+  });
+  // クリックハンドラを新しいリンクにも付与
+  enhanceArticleLinks(root);
+}
+
+
+
+
+
+
+
+
+// ====== 6) モーダル内広告（コンテナ指定版） ======
+async function renderModalAdsInto(gridEl) {
   try {
-    populateFilters(window.allArticles);
+    const pool = await fetchAdsFor('article');
+    const listState = rr_getState('list');
+    const exclude = Array.isArray(listState.currentCompanies) ? listState.currentCompanies : [];
+    const picked = nextBatchFor('article', pool, { count: AD_SLOTS, excludeCompanies: exclude });
+
+    if (picked.length) {
+      gridEl.innerHTML = picked.map(a => `
+        <a class="ad" href="${a.clickUrl || '#'}" target="_blank" rel="noopener">
+          <img src="${a.imageUrl}" alt="${(a.alt||'').replace(/"/g,'&quot;')}" loading="lazy">
+        </a>
+      `).join('');
+    }
   } catch (e) {
-    console.warn('[LOAD] populateFilters error', e);
+    console.warn('[ads-modal-into] load error', e);
   }
+}
 
-  try {
-    populateCategoryFilter(window.allArticles, window.categoryMap || {});
-  } catch (e) {
-    console.warn('[LOAD] populateCategoryFilter error', e);
+
+</script>
+
+<script>
+
+// 入力ゆれ対策：NFKC＋連続空白つぶし
+function normalizeJaQuery(s = '') {
+  return String(s).normalize('NFKC').replace(/[ \u3000]+/g, ' ').trim();
+}
+
+
+// --- ここから追加（tokenizeJa の直後）---
+function _normalizeJa(s = '') {
+  return String(s).normalize('NFKC').replace(/\s+/g, ' ').trim();
+}
+
+// 会社表記や表記ゆれも含めた日本語正規化（インデックス側と同等）
+const COMPANY_MARKERS = /(株式会社|（株）|\(株\)|㈱|有限会社|（有）|\(有\)|㈲|合同会社|（同）|\(同\)|一般社団法人|（一社）|一般財団法人|（一財）|学校法人|医療法人|社会福祉法人)/g;
+const STOPWORDS = new Set(['が','の','は','を','に','へ','と','で','も','や','より','から','まで','ので','なら','って','にて','として']);
+
+function normalizeJaText(s){
+  if (!s) return '';
+  let t = String(s).normalize('NFKC').toLowerCase();
+  t = t.replace(COMPANY_MARKERS, ''); // ← ここで㈱（株）等を削除
+  // ひらがな→カタカナ（表記ゆれ吸収）
+  t = t.replace(/[\u3041-\u3096]/g, ch => String.fromCharCode(ch.charCodeAt(0)+0x60));
+  // 記号類を空白化（漢字/カタカナ/英字/数字だけ残す）
+  t = t.replace(/[^A-Za-z0-9\u3400-\u9FFF\uF900-\uFAFF\u30A0-\u30FF\u31F0-\u31FF\uFF65-\uFF9F]+/g, ' ');
+  return t.trim();
+}
+
+
+// 2文字バイグラム + 先頭2-4文字プレフィックスも足す
+function tokenizeJaPlus(str){
+  const txt = normalizeJaText(str);
+  let tokens;
+  if (window.TinySegmenter) {
+    const seg = new TinySegmenter();
+    tokens = seg.segment(txt);
+  } else {
+    tokens = txt.split(/\s+/);
   }
+  tokens = tokens.filter(t => t && !STOPWORDS.has(t));
 
-  try {
-    renderArticles(window.allArticles, { mode: 'default' });
-  } catch (e) {
-    console.warn('[LOAD] renderArticles error', e);
-  }
+  const extras = [];
+  for (const t of tokens) {
+    if (!RE_TOKEN_OK.test(t)) continue;
 
-  try {
-    initSearchUI();
-  } catch (e) {
-    console.warn('[LOAD] initSearchUI error', e);
-  }
+    // 略称（頭文字）対策：先頭2〜4文字
+    for (let k=2; k<=Math.min(4, t.length); k++) extras.push(t.slice(0, k));
 
-  console.log('[LOAD] done');
-} // ←←← ここで「本体の」カッコ閉じる
-
-// ===============================
-// グローバル公開：HTML 側のハンドラ
-// ===============================
-window.loadCategoriesThenArticles = loadCategoriesThenArticles;
-window.loadArticles = function () {
-  try {
-    loadCategoriesThenArticles();
-  } catch (e) {
-    console.error('[BOOT] loadArticles failed:', e);
-    const el = document.getElementById('searchResults');
-    if (el) {
-      el.innerHTML =
-        '<div class="search-message">記事データの読み込みに失敗しました。</div>';
+    // 部分一致対策：2文字バイグラム（経常/常収/収益 など）
+    if (t.length >= 2) {
+      for (let i=0; i<t.length-1; i++) extras.push(t.slice(i, i+2));
     }
   }
-}; // ← ラッパーの function を閉じる
+  return tokens.concat(extras);
+}
 
 
 
-// 検索・フィルタボタン / onkeyup から呼ばれる関数
-window.search = function () {
-  doSearchAndRender().catch((e) => {
-    console.error("[SEARCH] search error:", e);
+
+  
+const _idxCache = {}; // { y2025: MiniSearch, ... }
+
+async function loadIndexShard(key) {
+  // key: "2025-H1" など。従来の "2025" だけでもOK
+  const shardDocId = /^y/.test(key) ? key : `y${key}`; // "2025-H1" → "y2025-H1"
+  if (_idxCache[shardDocId]) return _idxCache[shardDocId];
+
+  try {
+    const snap = await db.collection('search_indexes').doc(shardDocId).get();
+    if (!snap.exists) return null;
+
+    const raw = snap.data().json;
+    const jsonStr = (typeof raw === 'string') ? raw : JSON.stringify(raw);
+
+    // ★（任意）安全マージンのログ
+    const bytes = new TextEncoder().encode(jsonStr).length;
+    if (bytes > 800_000) console.warn(`[IDX] ${shardDocId} ~${(bytes/1024).toFixed(1)}KB (near 1MiB)`);
+
+    const idx = MiniSearch.loadJSON(jsonStr, {
+      fields: ['title','plainContent','keywords','bigrams'],
+      storeFields: ['articleId','title','issue','publishDate'],
+      tokenize: tokenizeJaPlus,
+      searchOptions: { prefix:true, fuzzy:0.1, combineWith:'AND',
+        boost: { title:5, keywords:3, plainContent:1, bigrams:0.7 } }
+    });
+
+    _idxCache[shardDocId] = idx;
+    return idx;
+  } catch (e) {
+    console.warn(`[IDX] failed to load shard: ${shardDocId}`, e);
+    return null;
+  }
+}
+
+
+// ★ シャード一覧を _meta から1回だけ取得（フォールバックはコレクション走査）
+// 形式例: ["2025-H2","2025-H2-2","2025-H1","2024-H2", ...]
+let _availableIndexShardsCache = null;
+
+async function getAvailableIndexShards(forceRefresh = false) {
+  if (_availableIndexShardsCache && !forceRefresh) return _availableIndexShardsCache;
+
+  try {
+    const snap = await db.collection('search_indexes').doc('_meta').get();
+    if (snap.exists) {
+      const arr =
+        (Array.isArray(snap.data()?.years) && snap.data().years) ||
+        (Array.isArray(snap.data()?.list) && snap.data().list) ||
+        null;
+      if (arr && arr.length) {
+        _availableIndexShardsCache = arr;
+        return arr;
+      }
+    }
+  } catch (e) {
+    console.warn('[IDX] _meta read failed → scan fallback', e);
+  }
+
+  // フォールバック：search_indexes をざっと走査
+  const s = await db.collection('search_indexes').get();
+  const list = s.docs
+    .map(d => (d.id.match(/^y(\d{4}(?:-H[12])?(?:-\d+)?)$/) || [,''])[1])
+    .filter(Boolean);
+  _availableIndexShardsCache = list;
+  return list;
+}
+
+
+
+
+// 候補IDのうち「正規化した本文に正規化したクエリが連続出現する」ものだけ残す
+async function enforcePhraseOnCandidates(ids, phrase, limit = 25) {
+  // 正規化：NFKC / ひら→カナ / 記号除去 / 小文字
+  const norm = s => String(s)
+    .normalize('NFKC')
+    .replace(/[\u3041-\u3096]/g, ch => String.fromCharCode(ch.charCodeAt(0)+0x60))
+    .replace(/[^A-Za-z0-9\u3400-\u9FFF\uF900-\uFAFF\u3040-\u309F\u30A0-\u30FF\u31F0-\u31FF\uFF65-\uFF9F]+/g, '')
+    .toLowerCase();
+
+  const target = norm(phrase);
+  if (!target) return ids;
+
+  // もともとの順序を保持できるようにマップ化
+  const order = new Map(ids.map((id, i) => [id, i]));
+
+  const out = [];
+  const max = Math.min(ids.length, limit);
+
+  // Firestore の where(documentId(), 'in', [...]) は 10 件まで → 10件ずつ分割
+  for (let i = 0; i < max; i += 10) {
+    const chunk = ids.slice(i, Math.min(max, i + 10));
+    const snap = await db.collection('articles')
+      .where(firebase.firestore.FieldPath.documentId(), 'in', chunk)
+      .get();
+
+    snap.forEach(doc => {
+      const html = doc.data()?.htmlContent || '';
+      const text = htmlToPlainTextForIndex(html);
+      if (norm(text).includes(target)) out.push(doc.id);
+    });
+  }
+
+  // もとの順序で並べ替えて返す
+  return out.sort((a, b) => (order.get(a) ?? 1e9) - (order.get(b) ?? 1e9));
+}
+
+
+// CJK or 英数の1文字判定（ひら/カタカナ拡張・半角カナも含む）
+const isCjkOrAlnum = ch =>
+  /[\u3400-\u9FFF\uF900-\uFAFF\u3040-\u30FF\u31F0-\u31FF\uFF65-\uFF9FA-Za-z0-9]/.test(ch);
+
+// 検索語を正規化し、語＋2文字バイグラムへ分解
+function queryTerms(q) {
+  const s = normalizeJaText(q); // ㈱/（株）なども除去済み
+  const terms = tokenizeJaPlus(s).filter(t => t.length >= 2 && !STOPWORDS.has(t));
+
+  // クエリ側も CJK 2-gram を作る（bigrams フィールド用）
+  const grams = [];
+  const t = s.normalize('NFKC').replace(/\s+/g, '');
+  for (let i = 0; i < t.length - 1; i++) {
+    const a = t[i], b = t[i + 1];
+    if (isCjkOrAlnum(a) && isCjkOrAlnum(b)) grams.push(a + b);
+  }
+  // ユニーク化して返す
+  return { terms: Array.from(new Set(terms)), grams: Array.from(new Set(grams)) };
+}
+
+
+function smartSearch(idx, rawQuery) {
+  const q = normalizeJaText(rawQuery);
+  if (!q) return [];
+
+  // CJK 文字数が多い or スペースを含む → 長いフレーズとして扱う
+  const RE_CJKLIKE_GLOBAL = /[\u3400-\u9FFF\uF900-\uFAFF\u3040-\u309F\u30A0-\u30FF\u31F0-\u31FF\uFF65-\uFF9F]/g;
+  const isLongPhrase = (q.match(RE_CJKLIKE_GLOBAL) || []).length >= 6 || /\s/.test(rawQuery);
+
+  // クエリ側 CJK バイグラム（順序は見ないが AND で厳しく）
+  const RE_CJKLIKE_SINGLE = /[\u3400-\u9FFF\uF900-\uFAFF\u3040-\u309F\u30A0-\u30FF\u31F0-\u31FF\uFF65-\uFF9F]/;
+// クエリ側 CJK バイグラム（順序は見ないが AND で厳しく）
+const grams = (() => {
+  const t = q.normalize('NFKC').replace(/\s+/g, '');
+  const out = [];
+  for (let i = 0; i < t.length - 1; i++) {
+    const a = t[i], b = t[i + 1];
+    if (isCjkOrAlnum(a) && isCjkOrAlnum(b)) out.push(a + b);
+  }
+  return Array.from(new Set(out));
+})();
+
+  // (A) bigrams 検索を少し緩め（2文字社名の拾い上げ強化）
+if (grams.length) {
+  const rA = idx.search(grams.join(' '), {
+    fields: ['bigrams','title','keywords'],
+    combineWith: 'OR', // ← AND→ORに変更
+    prefix: true,      // ← 部分一致許可
+    fuzzy: 0.1,
+    boost: { title: 5, keywords: 3, bigrams: 0.7 }
+  });
+  if (rA.length) return rA;
+}
+
+
+  // (B) 少し緩め：本文も含め AND。長文は prefix を切り fuzzy をごく弱く
+  const rB = idx.search(q, {
+    fields: ['title','keywords','plainContent','bigrams'],
+    combineWith: 'AND',
+    prefix: !isLongPhrase,
+    fuzzy:  isLongPhrase ? 0.1 : 0,
+    boost: { title: 5, keywords: 3, plainContent: 1, bigrams: 0.7 }
+  });
+  if (rB.length) return rB;
+
+  // (C) 最終網：OR。ただし bigrams を除外し、fuzzy も弱く
+  return idx.search(q, {
+    fields: ['title','keywords','plainContent'],
+    combineWith: 'OR',
+    prefix: !isLongPhrase,
+    fuzzy:  isLongPhrase ? 0.05 : 0,
+    boost: { title: 5, keywords: 3, plainContent: 1 }
+  });
+}
+
+
+
+async function searchArticleIdsByShards(query, shardKeys) {
+  const ok = await ensureMiniSearchLoaded();
+  if (!ok) return [];
+
+  const hits = [];
+  for (const key of shardKeys) {
+    const idx = await loadIndexShard(key);
+    if (!idx) continue;
+    try {
+      const r = smartSearch(idx, normalizeJaText(query));
+      r.forEach(h => hits.push({ id: h.id || h.articleId, score: h.score, shard: key }));
+    } catch (e) {
+      console.warn(`[IDX] search failed on ${key}`, e);
+    }
+  }
+
+  const best = new Map();
+  for (const h of hits) {
+    const prev = best.get(h.id);
+    if (!prev || h.score > prev.score) best.set(h.id, h);
+  }
+  return Array.from(best.values())
+    .sort((a,b) => (b.score||0) - (a.score||0))
+    .map(h => h.id);
+}
+
+
+</script>
+
+
+
+
+<script>
+/* ===== 広告ロジック（記事一覧 "list" 用） ===== */
+
+const ADS_COLLECTION = 'ads';
+const AD_COLS = 2;
+let adRows = 2;          // 既定は2段
+const adRowsMax = 5;     // 最大5段
+let _adsPool = [];       // 候補プール
+
+function toDate(v){ if (!v) return null; if (typeof v?.toDate==='function') return v.toDate(); if (typeof v==='string') return new Date(v); return v instanceof Date ? v : null; }
+function currentMonth(){ return (new Date()).getMonth()+1; }
+
+async function fetchAdsFor(placement) {
+  const now = new Date();
+  const thisMonth = currentMonth();
+  const snap = await db.collection('ads').where('active','==', true).get();
+  const out = [];
+  snap.forEach(doc => {
+    const d = doc.data();
+    const places = Array.isArray(d.placements) ? d.placements : ['list','article'];
+    if (!places.includes(placement)) return;
+    const s = toDate(d.startAt), e = toDate(d.endAt);
+    const inWindow = (!s || now >= s) && (!e || now <= e);
+    if (!inWindow || !d.imageUrl) return;
+    const months = Array.isArray(d.months) ? d.months : [];
+    if (months.length && !months.includes(thisMonth)) return; // 季節物
+    out.push({ id: doc.id, weight: Number(d.weight)||1, ...d });
+  });
+  return out;
+}
+
+// ====== モーダル保護 一式 ======
+const PROTECT_CFG = {
+  copy: true,       // コピー/選択/右クリック/ドラッグ抑止
+  print: true,      // モーダル開いてる間は印刷白紙
+  devtools: false,   // DevTools検知でブラー＋任意アクション
+  devtoolsAction: 'close', // ← ここを変更
+  watermark: false   // 透かしは表示場所が微妙になるため入れない
+};
+
+let _protectCleanups = [];
+
+/** モーダル保護を適用 */
+function applyArticleProtections() {
+  cleanupArticleProtections(); // 二重適用防止
+
+  const modal = document.getElementById('articleModal');
+  const content = modal.querySelector('.modal-content');
+  if (!modal || !content) return;
+
+  // 1) コピー/選択/右クリ/ドラッグ等を抑止（モーダル内のみ捕捉）
+  if (PROTECT_CFG.copy) {
+    const prevent = e => { e.preventDefault(); e.stopPropagation(); };
+    const onCopy = e => { prevent(e); try { e.clipboardData?.setData('text/plain','コピーは無効です'); } catch(_){} };
+    const typeTargets = [
+      ['contextmenu', prevent, true],
+      ['selectstart', prevent, true],
+      ['dragstart',   prevent, true],
+      ['copy',        onCopy,  true],
+      ['cut',         prevent, true],
+      ['paste',       prevent, true]
+    ];
+    typeTargets.forEach(([t,fn,opt]) => {
+      content.addEventListener(t, fn, opt);
+      _protectCleanups.push(()=>content.removeEventListener(t, fn, opt));
+    });
+
+    // キーボード経由のコピー/全選択/保存/印刷/ソース表示/F12など
+    const onKeyDown = e => {
+      const k = (e.key||'').toLowerCase();
+      const ctrl = e.ctrlKey || e.metaKey;
+      if (
+        (ctrl && ['c','x','a','s','p','u'].includes(k)) || // Ctrl/Cmd + C/X/A/S/P/U
+        e.key === 'F12' ||
+        (ctrl && e.shiftKey && ['i','j','c'].includes(k))  // DevTools系
+      ) { e.preventDefault(); e.stopPropagation(); }
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    _protectCleanups.push(()=>document.removeEventListener('keydown', onKeyDown, true));
+
+    // PrintScreen押下 → クリップボード上書き（対応ブラウザのみ）
+    const onKeyUp = async e => {
+      if (e.key === 'PrintScreen') {
+        try { await navigator.clipboard.writeText('スクリーンショットは禁止されています'); } catch(_) {}
+        alert('スクリーンショットはご遠慮ください。');
+      }
+    };
+    document.addEventListener('keyup', onKeyUp, true);
+    _protectCleanups.push(()=>document.removeEventListener('keyup', onKeyUp, true));
+  }
+
+  // 2) 印刷抑止（モーダル開いてる間だけ）
+  if (PROTECT_CFG.print) {
+    document.body.classList.add('modal-open');
+    _protectCleanups.push(()=>document.body.classList.remove('modal-open'));
+    const before = ()=>{};
+    const after  = ()=>{};
+    window.addEventListener('beforeprint', before);
+    window.addEventListener('afterprint',  after);
+    _protectCleanups.push(()=>window.removeEventListener('beforeprint', before));
+    _protectCleanups.push(()=>window.removeEventListener('afterprint',  after));
+  }
+
+  // 3) DevTools検知（簡易）：ウィンドウ枠サイズ差で推定
+  if (PROTECT_CFG.devtools) {
+    const check = () => {
+      const th = 160; // パネル幅のしきい値
+      const opened =
+        (window.outerWidth - window.innerWidth > th) ||
+        (window.outerHeight - window.innerHeight > th);
+
+      document.body.classList.toggle('devtools-open', !!opened);
+
+      if (!opened) return;
+
+      // DevTools 開いた瞬間の挙動
+      if (PROTECT_CFG.devtoolsAction === 'close') {
+        try {
+          const modal = document.getElementById('articleModal');
+          const content = modal?.querySelector('.content');
+          if (content) {
+            // 本文を完全削除（テキスト残さない）
+            content.innerHTML = '<p class="article-loading-message">DevTools検知のため本文を非表示にしました。</p>';
+          }
+
+          // 復号鍵や一時キャッシュもできるだけ破棄
+          if (window.__lastOpenKey) window.__lastOpenKey = null;
+
+          // モーダルを閉じる（padding等の後片付け含め）
+          if (typeof closeArticlePopup === 'function') {
+            closeArticlePopup();
+          } else if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = '';
+          }
+        } catch (e) {
+          console.warn('[protect] close-on-devtools failed', e);
+        }
+      }
+
+      if (PROTECT_CFG.devtoolsAction === 'logout') {
+        try { auth?.signOut?.(); } catch(_) {}
+      }
+    };
+
+    const id = setInterval(check, 600);
+    _protectCleanups.push(() => clearInterval(id));
+
+    const onResize = () => check();
+    window.addEventListener('resize', onResize);
+    _protectCleanups.push(() => window.removeEventListener('resize', onResize));
+  }
+
+  // 4) 透かし（閲覧者メール＋時刻）
+  if (PROTECT_CFG.watermark) {
+    const email = auth?.currentUser?.email || 'member';
+    const text  = `${email} · ${new Date().toLocaleString()}`;
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="380" height="220">
+        <text x="0" y="60" fill="rgba(0,0,0,.15)" font-size="20" font-family="Arial, sans-serif"
+              transform="rotate(-30, 0, 0)">${text}</text>
+      </svg>`;
+    const data = `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`;
+    content.style.backgroundImage = data;
+    content.style.backgroundRepeat = 'repeat';
+    content.style.backgroundSize = '380px 220px';
+    _protectCleanups.push(()=>{
+      content.style.backgroundImage = '';
+      content.style.backgroundRepeat = '';
+      content.style.backgroundSize   = '';
+    });
+  }
+}
+
+/** モーダル保護を解除（close時に呼ぶ） */
+function cleanupArticleProtections() {
+  try { _protectCleanups.forEach(fn => fn()); } catch(_){}
+  _protectCleanups = [];
+}
+
+
+
+/* ========= 会社ベースのラウンドロビン（重み付き） ========= */
+
+const RR_KEY_PREFIX = 'ads:rr:v1:';    // localStorage キー
+const AD_SLOTS = 6;                    // 1画面の枠数
+const COOLDOWN_ROUNDS = 1;             // 直前ラウンドの会社は除外（連続回避）
+
+function rr_getState(placement){
+  try{
+    const s = JSON.parse(localStorage.getItem(RR_KEY_PREFIX+placement) || '{}');
+    s.round ??= 0;
+    s.nextEligible ??= {};   // companyId -> round (このラウンド以降に出せる)
+    s.lastShown ??= {};      // companyId -> round（最後に出したラウンド）
+    s.adIndex ??= {};        // companyId -> 会社内の次の広告インデックス
+    s.currentCompanies ??= [];// 直近表示中の会社ID（重複表示防止用）
+    return s;
+  }catch(_){ return { round:0,nextEligible:{},lastShown:{},adIndex:{},currentCompanies:[] }; }
+}
+function rr_saveState(placement, st){
+  try{ localStorage.setItem(RR_KEY_PREFIX+placement, JSON.stringify(st)); }catch(_){}
+}
+
+// 会社ごとにまとめる
+function groupByCompany(pool){
+  const map = new Map();
+  for (const a of pool){
+    const cid = a.companyId || a.company || 'unknown';
+    if (!map.has(cid)) map.set(cid, []);
+    map.get(cid).push(a);
+  }
+  return map;
+}
+
+// 会社内のローテ（順送り）
+function pickOneFromCompany(cid, adsOfCompany, state){
+  let i = state.adIndex[cid] | 0;
+  if (!(i>=0 && i<adsOfCompany.length)) i = 0;
+  const ad = adsOfCompany[i % adsOfCompany.length];
+  state.adIndex[cid] = (i + 1) % adsOfCompany.length;
+  return ad;
+}
+
+// 固定枠を先に埋める（同じ会社が複数固定は許容）
+function takeFixedSlots(pool, placement, count=AD_SLOTS){
+  const slots = new Array(count).fill(null);
+  const usedCompanies = new Set();
+  const getPos = a => placement==='list' ? Number(a.fixedListPos) : Number(a.fixedArticlePos);
+
+  const fixed = pool.filter(a => {
+    const p = getPos(a);
+    return p>=1 && p<=count;
+  }).sort((a,b)=>getPos(a)-getPos(b));
+
+  for (const ad of fixed){
+    const pos = getPos(ad)-1;
+    if (!slots[pos]) {
+      slots[pos] = ad;
+      usedCompanies.add(ad.companyId || ad.company || 'unknown');
+    }
+  }
+  return { slots, usedCompanies };
+}
+
+// 重み（未設定は1）。「2 = 2周に1回」の解釈。
+function getWeightFromCompany(adsOfCompany){
+  // 同社の広告で weight が混在していたら “最大値” を採用（出にくい方に寄せる）
+  return Math.max(1, ...adsOfCompany.map(a => Number(a.weight)||1));
+}
+
+// 1バッチ（6枠）選ぶ。基本は「前回出た会社は除外」＋「nextEligible を満たす会社」優先。
+// 足りなければ除外をゆるめて必ず6枠埋めに行く（同一会社の複数枠は最終手段で許可）。
+function nextBatchFor(placement, pool, {
+  count = AD_SLOTS,
+  excludeCompanies = [],   // 記事側はリストの現在会社を除外したいのでここに渡す
+}={}){
+  const state = rr_getState(placement);
+  const byCompany = groupByCompany(pool);
+  const now = state.round|0;
+  const excludeSet = new Set([
+    ...excludeCompanies,
+    ...(state.currentCompanies||[]) // 直前バッチの会社は除外（連続回避）
+  ]);
+
+  // 1) 固定枠
+  const { slots, usedCompanies } = takeFixedSlots(pool, placement, count);
+
+  // 2) 回転枠で使える会社（固定で既に使った会社 & 除外は外す）
+  const allCompanies = [...byCompany.keys()].filter(cid => !usedCompanies.has(cid) && !excludeSet.has(cid));
+
+  // 3) “今のラウンドで出せる会社” を優先（lastShownが古い順）
+  const eligible = allCompanies
+    .filter(cid => (state.nextEligible[cid] ?? 0) <= now)
+    .sort((a,b) => (state.lastShown[a] ?? -1) - (state.lastShown[b] ?? -1));
+
+  // 4) 足りなければ nextEligible を無視して補充（同上ソート）
+  const backup = allCompanies
+    .filter(cid => !eligible.includes(cid))
+    .sort((a,b) => {
+      const ne = (state.nextEligible[a]??0) - (state.nextEligible[b]??0);
+      if (ne !== 0) return ne; // 早く出られる方を優先
+      return (state.lastShown[a] ?? -1) - (state.lastShown[b] ?? -1);
+    });
+
+  const pickCompanyOrder = [...eligible, ...backup];
+
+  // 5) スロットを埋める（回転枠）
+  const result = slots.slice(); // 先に固定が入ってる
+  const usedNow = new Set([...usedCompanies]); // このバッチで使った会社（重複禁止）
+  for (let i=0; i<count; i++){
+    if (result[i]) continue; // 既に固定が入ってる
+    const cid = pickCompanyOrder.find(c => !usedNow.has(c));
+    if (!cid) break;
+    const ad = pickOneFromCompany(cid, byCompany.get(cid), state);
+    result[i] = ad;
+    usedNow.add(cid);
+
+    // 表示後に nextEligible / lastShown 更新
+    const w = getWeightFromCompany(byCompany.get(cid));   // 1=毎ラウンド候補, 2=2周に1回
+    state.lastShown[cid] = now;
+    state.nextEligible[cid] = now + (w); // 例）w=2 → 今ラウンドの次+1ラウンドまでは出さない
+  }
+
+  // 6) まだ空きがあれば、やむなく同一会社の2枚目以降も許可（会社数 < 枠数 のとき）
+  if (result.some(v => !v)) {
+    const remainIdx = result.map((v,idx)=>v?null:idx).filter(v=>v!=null);
+    // 固定会社も含め “会社数の少なさ” を埋めるため、順当に順送りで追加
+    const companiesAny = [...byCompany.keys()];
+    let p = 0;
+    for (const idx of remainIdx){
+      const cid = companiesAny[p % companiesAny.length];
+      p++;
+      const ad = pickOneFromCompany(cid, byCompany.get(cid), state);
+      result[idx] = ad;
+      state.lastShown[cid] = now;
+      const w = getWeightFromCompany(byCompany.get(cid));
+      state.nextEligible[cid] = Math.max(state.nextEligible[cid] ?? now, now + (w));
+    }
+  }
+
+  // 7) ラウンド進行 & 直近会社を保存
+  const finalCompanies = result.map(a => a.companyId || a.company || 'unknown');
+  state.currentCompanies = finalCompanies;
+  state.round = now + 1; // 1バッチ＝1ラウンド
+  rr_saveState(placement, state);
+
+  return result;
+}
+
+
+function adjustBodyBottomPadding() {
+  const drawer = document.getElementById('adDrawer');
+  if (!drawer) return;
+  const h = drawer.offsetHeight || 0;
+  document.body.style.paddingBottom = h ? (h + 10) + 'px' : '';
+}
+
+// リストは常に6枚。固定枠を尊重しつつ、会社は1回/画面。
+function renderAdDrawer() {
+  const grid   = document.getElementById('adGrid');
+  const drawer = document.getElementById('adDrawer');
+  if (!grid || !drawer) return;
+
+  const picked = nextBatchFor('list', _adsPool, { count: AD_SLOTS });
+  if (!picked || !picked.length){
+    drawer.style.display = 'none';
+    document.body.style.paddingBottom = '';
+    return;
+  }
+
+  grid.innerHTML = picked.map(a => `
+    <a class="ad" href="${a.clickUrl || '#'}" target="_blank" rel="noopener">
+      <img src="${a.imageUrl}" alt="${(a.alt||'').replace(/"/g,'&quot;')}" loading="lazy">
+    </a>
+  `).join('');
+
+  drawer.style.display = 'block';
+  requestAnimationFrame(adjustBodyBottomPadding);
+}
+
+
+
+async function initListAds(){
+  try{
+    _adsPool = await fetchAdsFor('list');
+    renderAdDrawer(adRows);
+  } catch(e){
+    console.warn('[ads] load error', e);
+  }
+  // 端末回転/リサイズ時も高さを再計算
+  window.addEventListener('resize', adjustBodyBottomPadding);
+}
+
+</script>
+
+
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/minisearch@6.3.0/dist/umd/index.min.js"></script>
+
+
+<script>
+  // CJKは1文字単位、英数は単語ごとに分割して行折返しを安定化
+  function splitForCJK(str) {
+    const out = [];
+    let buf = "";
+    for (const ch of String(str)) {
+      // 漢字・ひら・カタカナ・半角カナの判定（index.html内に同種の正規表現あり）
+      const isCJK = /[\u3400-\u9FFF\uF900-\uFAFF\u3040-\u309F\u30A0-\u30FF\u31F0-\u31FF\uFF65-\uFF9F]/.test(ch);
+      if (isCJK) {
+        if (buf) { out.push(buf); buf = ""; }
+        out.push(ch);            // CJKは1文字ずつ
+      } else if (/\s/.test(ch)) {
+        if (buf) { out.push(buf); buf = ""; }
+        out.push(ch);            // 空白は空白として
+      } else {
+        buf += ch;               // 英数は単語で貯める
+      }
+    }
+    if (buf) out.push(buf);
+    return out;
+  }
+</script>
+
+
+<script>
+
+
+  // プレーンフォールバック（/build_plain_articles/<slug>.json）
+  async function fetchPlainArticle(slug, urlOverride){
+   const url = urlOverride || `/build_plain_articles/${encodeURIComponent(slug)}.json`;
+    const res=await fetch(url, { cache:"no-store" });
+    if(!res.ok) throw new Error(`plain http ${res.status}`);
+    const j=await res.json();
+    return {
+      title: j.title||"",
+      subtitle1: j.subtitle1||"",
+      subtitle2: j.subtitle2||"",
+      publishDate: j.publishDate||"",
+      issueNumber: j.issue||j.issueNumber||"",
+      content: j.htmlContent||j.body||""
+    };
+  }
+
+// ===== モーダル記事表示（履歴つき） =====
+
+// モーダル内の「記事履歴」と「今表示しているslug」
+window.articleModalHistory = [];
+window.currentArticleSlug  = null;
+
+// 一覧→モーダルの戻るボタン用 HTML 生成
+function generateArticleHtml(a){
+  const safeTitle = (a.title || "").replace(/</g,"&lt;");
+  const safeSub1  = (a.subtitle1 || "").replace(/</g,"&lt;");
+  const safeSub2  = (a.subtitle2 || "").replace(/</g,"&lt;");
+
+  return `
+    <div class="header-section">
+      <div class="logo-text">Members Page</div>
+      <div class="meta-info">
+        ${a.publishDate ? `公開日：${a.publishDate}` : ""}
+        ${a.issueNumber ? ` / ${a.issueNumber}` : ""}
+      </div>
+    </div>
+    <div class="title-section">
+      <h1 class="main-title">${safeTitle}</h1>
+      ${a.subtitle1 ? `<h2 class="subtitle">${safeSub1}</h2>` : ""}
+      ${a.subtitle2 ? `<h3 class="subtitle">${safeSub2}</h3>` : ""}
+    </div>
+    <div class="content">${a.content || ""}</div>
+    <div class="button-container">
+      <!-- 一覧に戻るボタンは「完全クローズ」専用 -->
+      <a class="back-button"
+         href="#"
+         onclick="closeArticlePopup({ forceClose: true }); return false;">
+        一覧に戻る
+      </a>
+    </div>
+    <div class="ad-sticky">
+      <div id="modalAdGrid" class="ad-grid"></div>
+    </div>
+  `;
+}
+
+
+
+// Worker から JSON を取ってくるだけの関数
+async function fetchArticleJson(slug) {
+  const url = `${WORKER_URL}/${encodeURIComponent(slug)}`;
+  const res = await fetch(url, { cache: "no-store" });
+
+  if (res.status === 404) {
+    throw new Error(`記事が見つかりません (slug=${slug})`);
+  }
+  if (!res.ok) {
+    throw new Error(`Worker error ${res.status}`);
+  }
+  return await res.json(); // Workerは復号済みJSONを返す想定
+}
+
+// これが“唯一の”オープナー（JSON前提＋履歴管理）
+async function openArticleCanvas(slug, { pushHistory = true } = {}) {
+  const overlay = document.getElementById('articleModal');
+  const box     = document.getElementById('modalContent');
+
+  if (!overlay || !box) {
+    console.error('[openArticleCanvas] modal elements not found');
+    return;
+  }
+
+  // 直前に別の記事を表示していたら履歴に積む
+  const prev = window.currentArticleSlug;
+  if (pushHistory && prev && prev !== slug) {
+    window.articleModalHistory.push(prev);
+  }
+  window.currentArticleSlug = slug;
+
+  overlay.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  box.innerHTML = '<p class="article-loading-message">記事を読み込み中...</p>';
+
+  try {
+    // ① Worker から復号済みJSONを取得
+    const dec = await fetchArticleJson(slug);
+
+    // ② 表示用に整形
+    const a = {
+      title:       dec.title       || "",
+      subtitle1:   dec.subtitle1   || "",
+      subtitle2:   dec.subtitle2   || "",
+      publishDate: dec.publishDate || "",
+      issueNumber: dec.issue || dec.issueNumber || "",
+      content:     dec.body || dec.htmlContent || ""
+    };
+
+    box.innerHTML = generateArticleHtml(a);
+
+    // 本文内リンク・号数リンク
+    try { linkifyIssueRefs?.(box); } catch(_){}
+    try { enhanceArticleLinks?.(box); } catch(_){}
+    try { resolvePendingIssueLinks?.(box); } catch(_){}
+
+    // モーダル内広告
+    try {
+      const g = box.querySelector('#modalAdGrid');
+      g && renderModalAdsInto?.(g);
+    } catch(_){}
+
+    // コピー禁止・DevTools検知など
+    try { applyArticleProtections?.(); } catch(_){}
+
+    // GA
+    try {
+      window.gtag?.('event','view_item',{
+        item_id: slug,
+        item_name: a.title || slug
+      });
+    } catch(_){}
+
+  } catch (e1) {
+    console.warn('[openArticleCanvas] Worker JSON failed → plain fallback', e1);
+
+    try {
+      // ③ Workerがダメなときは、build_plain_articles のプレーンJSONにフォールバック
+      const a = await fetchPlainArticle(slug);
+      box.innerHTML = generateArticleHtml(a);
+
+      try { linkifyIssueRefs?.(box); } catch(_){}
+      try { enhanceArticleLinks?.(box); } catch(_){}
+      try { resolvePendingIssueLinks?.(box); } catch(_){}
+      try {
+        const g = box.querySelector('#modalAdGrid');
+        g && renderModalAdsInto?.(g);
+      } catch(_){}
+      try { applyArticleProtections?.(); } catch(_){}
+      try {
+        window.gtag?.('event','view_item',{
+          item_id: slug,
+          item_name: a.title || slug
+        });
+      } catch(_){}
+
+    } catch (e2) {
+      console.error('[openArticleCanvas] fallback plain failed', e2);
+      box.innerHTML =
+        `<p class="article-loading-message" style="color:red;">記事の読み込みに失敗しました。</p>`;
+    }
+  }
+}
+
+// 古いコード互換
+window.openArticleCanvas = openArticleCanvas;
+window.showArticlePopup  = openArticleCanvas;
+
+// 閉じる：
+//  - 履歴があれば「一つ前の記事」に戻る
+//  - 履歴が空か forceClose=true のときは完全クローズ
+function closeArticlePopup(options = {}) {
+  const { forceClose = false } = options;
+
+  // 戻り先がある & 強制クローズでない → ひとつ前の記事に戻る
+  if (!forceClose && window.articleModalHistory.length > 0) {
+    const backSlug = window.articleModalHistory.pop();
+    if (backSlug) {
+      // 戻るときは pushHistory=false（また履歴を積まない）
+      openArticleCanvas(backSlug, { pushHistory: false });
+      return;
+    }
+  }
+
+  // ここまで来たら完全に閉じる
+  const modal = document.getElementById('articleModal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+
+  // 状態リセット
+  window.articleModalHistory = [];
+  window.currentArticleSlug  = null;
+
+  try { renderAdDrawer?.(); } catch(_){}
+  try { cleanupArticleProtections?.(); } catch(_){}
+}
+window.closeArticlePopup = closeArticlePopup;
+
+</script>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+  try {
+    await window.loadArticles();
+  } catch (e) {
+    console.error("[BOOT] loadArticles failed:", e);
     const el = document.getElementById("searchResults");
     if (el) {
-      el.innerHTML =
-        '<div class="search-message">検索中にエラーが発生しました。</div>';
+      el.innerHTML = '<div class="search-message">記事データの読み込みに失敗しました。</div>';
     }
-  });
-};
-
-window.filterResults = function () {
-  window.search();
-};
-
-// 旧HTML互換：onkeyup="searchArticles()" 用
-window.searchArticles = function () {
-  if (typeof window.search === "function") {
-    window.search();
   }
-};
+});
+</script>
 
-window.resetSearch = function () {
-  const searchBox   = document.getElementById("searchInput");
-  const yearSel     = document.getElementById("yearFilter");
-  const categorySel = document.getElementById("categoryFilter");
 
-  if (searchBox)   searchBox.value   = "";
-  if (yearSel)     yearSel.value     = "all";
-  if (categorySel) categorySel.value = "all";
 
-  const list = Array.isArray(window.allArticles) ? window.allArticles : [];
-  renderArticles(list, { mode: "grouped" });
+<script>
+(function () {
+  function delegateArticleClicks() {
+    const container = document.getElementById('searchResults');
+    if (!container) return;
 
-  const el = document.getElementById("searchResults");
-  if (el && !list.length) {
-    el.innerHTML =
-      '<div class="search-message">該当する記事はありません。</div>';
+    container.addEventListener('click', (e) => {
+      const linkEl = e.target.closest('a.article-link, a.js-article, .article-item a, [data-slug]');
+      if (!linkEl) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const slug =
+        linkEl.dataset?.slug ||
+        linkEl.getAttribute?.('data-slug') ||
+        linkEl.dataset?.articleId ||
+        linkEl.getAttribute?.('data-article-id') ||
+        linkEl.dataset?.id ||
+        linkEl.getAttribute?.('data-id') ||
+        (linkEl.getAttribute?.('href') || '').match(/slug=([^&#]+)/)?.[1] ||
+        '';
+
+      if (!slug) {
+        console.warn('[OPEN] no slug on click', linkEl);
+        alert('この記事の識別子(slug)が見つかりませんでした。リスト生成時に data-slug を埋めてください。');
+        return;
+      }
+
+
+        openArticleCanvas?.(slug);
+
+    });
   }
-};
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', delegateArticleClicks);
+  } else {
+    delegateArticleClicks();
+  }
+})();
+</script>
+
+
+<!-- これを </body> のちょっと上に置く（CSSとJSの想定IDに一致） -->
+<div id="articleModal" class="modal-overlay" style="display:none;">
+  <div class="modal-content">
+    <span class="close-button" onclick="closeArticlePopup()">×</span>
+    <div id="modalContent" class="content"></div>
+
+    <div class="ad-sticky">
+      <div id="modalAdGrid" class="ad-grid"></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ★必ずこの後に app.js を読む -->
+<script type="module" src="app.js?v=2025-11-27-4"></script>
+
+
+
+</body>
+</html>
