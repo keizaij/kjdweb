@@ -1775,15 +1775,15 @@ window.updateArticle = async function() {
   try {
     // ★ ここで busy 開始＋「保存準備中」ステータス表示
     githubBusy = true;
-    setMessage("GitHub への更新準備中です…（書き込み処理が完了するまで、更新ボタンは使えません）");
+    setMessage("記事データ生成中…（GitHub リポジトリ書込中）");
 
     await exportStaticFilesForArticle(currentArticleId, article, token);
     await updateManifestForArticle(currentArticleId, article, token);
 
     const count = await window.rebuildSearchSource();
     setMessage(
-      `GitHub 上の記事（${currentArticleId}）を更新しました（BIN は鍵未設定時はスキップ）。` +
-      `全文検索用データも更新しました（${count}件）。`
+      `記事（${currentArticleId}）・一覧・全文字検索データ更新完了（登録記事数${count}件）` +
+      `GitHub Actions により公開サイトへデプロイ（1分前後、保存／更新はお待ちください。編集は可能。）`
     );
   } catch (e) {
     console.error("[updateArticle] error:", e);
