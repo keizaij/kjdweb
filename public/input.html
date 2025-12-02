@@ -132,6 +132,17 @@
       margin-bottom: 1em;
     }
 
+/* Quill toolbar の社内リンクボタンの表示調整 */
+.ql-toolbar .ql-internal {
+  font-size: 12px;
+  padding: 2px 6px;
+  white-space: nowrap;       /* 文字を折り返さない */
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 
     /* モーダルウィンドウのスタイル */
     .modal-content {
@@ -1603,96 +1614,203 @@ window.rebuildSearchSource = async function() {
   return articles.length;
 };
 
+// ===============================
+// GitHub 書き込みクールダウン管理
+// ===============================
+let isGitSaving = false;
+let lastGitSaveAt = 0;
+const GIT_SAVE_COOLDOWN_MS = 60 * 1000; // 60秒クールダウン
+
+function openDeployBusyModal() {
+  const modal = document.getElementById('deployBusyModal');
+  if (modal) modal.style.display = 'flex';
+}
+
+window.closeDeployBusyModal = function () {
+  const modal = document.getElementById('deployBusyModal');
+  if (modal) modal.style.display = 'none';
+};
+
+/**
+ * 保存・更新処理を開始してよいかどうかチェック
+ * NG のときはモーダルを出して false を返す
+ */
+function canStartGitSave() {
+  const now = Date.now();
+
+  // すでに保存処理中
+  if (isGitSaving) {
+    openDeployBusyModal();
+    return false;
+  }
+
+  // 直近の保存からクールダウン中
+  if (lastGitSaveAt && (now - lastGitSaveAt) < GIT_SAVE_COOLDOWN_MS) {
+    openDeployBusyModal();
+    return false;
+  }
+
+  // 保存開始
+  isGitSaving = true;
+  return true;
+}
+
+/**
+ * 保存処理の終了を記録
+ * @param {boolean} ok 成功なら true
+ */
+function finishGitSave(ok) {
+  isGitSaving = false;
+  if (ok) {
+    lastGitSaveAt = Date.now();
+  }
+}
+
+
 
 // ===============================
 // 7. 保存 / 更新ボタン（JSON/BIN + manifest を GitHub に書き出し）
 // ===============================
+// ===============================
+// 7. 保存 / 更新ボタン（JSON/BIN + manifest を GitHub に書き出し）
+// ===============================
 window.saveArticle = async function() {
-  const base = getFormData();
-  if (!base) return;
 
-  const token = getGithubToken();
-  if (!token) {
-    setMessage("GitHub トークンを入力してください。", true);
+  // ★ クールダウン / 多重押しガード
+  if (!canStartGitSave()) {
     return;
   }
 
-  const docId = buildArticleDocId(base);
-  if (!docId) {
-    setMessage('号数と掲載順から ID を作成できません（新着以外は両方必須）。', true);
-    return;
-  }
-
-  const now = new Date().toISOString();
-  const article = {
-    ...base,
-    id: docId,
-    slug: docId,
-    createdAt: now,
-    updatedAt: now
-  };
-
-  await exportStaticFilesForArticle(docId, article, token);
-  await updateManifestForArticle(docId, article, token);
-
-  currentArticleId = docId;
-  currentArticleCreatedAt = article.createdAt;
-
-  // ★ 記事保存が終わったら、全文検索用データも再生成
   try {
-    const count = await window.rebuildSearchSource();
-    setMessage(
-      `GitHub に記事を書き出しました（${docId}.json / ${docId}.bin ※鍵未設定時は BIN スキップ）。` +
-      `全文検索用データも更新しました（${count}件）。`
-    );
+    const base = getFormData();
+    if (!base) {
+      // フォーム不備など → 保存開始扱いにはしたが、失敗として扱う
+      finishGitSave(false);
+      return;
+    }
+
+    const token = getGithubToken();
+    if (!token) {
+      setMessage("GitHub トークンを入力してください。", true);
+      finishGitSave(false);
+      return;
+    }
+
+    const docId = buildArticleDocId(base);
+    if (!docId) {
+      setMessage('号数と掲載順から ID を作成できません（新着以外は両方必須）。', true);
+      finishGitSave(false);
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const article = {
+      ...base,
+      id: docId,
+      slug: docId,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    // JSON / BIN / manifest 書き出し
+    await exportStaticFilesForArticle(docId, article, token);
+    await updateManifestForArticle(docId, article, token);
+
+    currentArticleId       = docId;
+    currentArticleCreatedAt = article.createdAt;
+
+    // ★ 記事保存が終わったら、全文検索用データも再生成
+    try {
+      const count = await window.rebuildSearchSource();
+      setMessage(
+        `GitHub に記事を書き出しました（${docId}.json / ${docId}.bin ※鍵未設定時は BIN スキップ）。` +
+        `全文検索用データも更新しました（${count}件）。`
+      );
+    } catch (e) {
+      console.error("[saveArticle] searchSource 更新エラー:", e);
+      setMessage(
+        `記事は保存できましたが、全文検索用データの更新に失敗しました: ${e.message || e}`,
+        true
+      );
+    }
+
+    // ここまで来たら成功
+    finishGitSave(true);
+
   } catch (e) {
-    console.error("[saveArticle] searchSource 更新エラー:", e);
+    console.error("[saveArticle] 保存中にエラー:", e);
     setMessage(
-      `記事は保存できましたが、全文検索用データの更新に失敗しました: ${e.message || e}`,
+      `GitHub への保存中にエラーが発生しました: ${e.message || e}`,
       true
     );
+    finishGitSave(false);
   }
 };
 
 
+
 window.updateArticle = async function() {
-  if (!currentArticleId) {
-    setMessage('更新対象の記事 ID がありません。先に JSON を読み込むか、新規保存してください。', true);
+
+  // ★ クールダウン / 多重押しガード
+  if (!canStartGitSave()) {
     return;
   }
-  const base = getFormData();
-  if (!base) return;
-
-  const token = getGithubToken();
-  if (!token) {
-    setMessage("GitHub トークンを入力してください。", true);
-    return;
-  }
-
-  const now = new Date().toISOString();
-  const article = {
-    ...base,
-    id: currentArticleId,
-    slug: currentArticleId,
-    createdAt: currentArticleCreatedAt || now,
-    updatedAt: now
-  };
-
-  await exportStaticFilesForArticle(currentArticleId, article, token);
-  await updateManifestForArticle(currentArticleId, article, token);
 
   try {
-    const count = await window.rebuildSearchSource();
-    setMessage(
-      `GitHub 上の記事（${currentArticleId}）を更新しました（BIN は鍵未設定時はスキップ）。` +
-      `全文検索用データも更新しました（${count}件）。`
-    );
+    if (!currentArticleId) {
+      setMessage('更新対象の記事 ID がありません。先に JSON を読み込むか、新規保存してください。', true);
+      finishGitSave(false);
+      return;
+    }
+
+    const base = getFormData();
+    if (!base) {
+      finishGitSave(false);
+      return;
+    }
+
+    const token = getGithubToken();
+    if (!token) {
+      setMessage("GitHub トークンを入力してください。", true);
+      finishGitSave(false);
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const article = {
+      ...base,
+      id: currentArticleId,
+      slug: currentArticleId,
+      createdAt: currentArticleCreatedAt || now,
+      updatedAt: now
+    };
+
+    await exportStaticFilesForArticle(currentArticleId, article, token);
+    await updateManifestForArticle(currentArticleId, article, token);
+
+    try {
+      const count = await window.rebuildSearchSource();
+      setMessage(
+        `GitHub 上の記事（${currentArticleId}）を更新しました（BIN は鍵未設定時はスキップ）。` +
+        `全文検索用データも更新しました（${count}件）。`
+      );
+    } catch (e) {
+      console.error("[updateArticle] searchSource 更新エラー:", e);
+      setMessage(
+        `記事は更新できましたが、全文検索用データの更新に失敗しました: ${e.message || e}`,
+        true
+      );
+    }
+
+    finishGitSave(true);
+
   } catch (e) {
-    console.error("[updateArticle] searchSource 更新エラー:", e);
+    console.error("[updateArticle] 更新中にエラー:", e);
     setMessage(
-      `記事は更新できましたが、全文検索用データの更新に失敗しました: ${e.message || e}`,
+      `GitHub への更新中にエラーが発生しました: ${e.message || e}`,
       true
     );
+    finishGitSave(false);
   }
 };
 
@@ -1761,7 +1879,6 @@ window.loadArticleForEdit = async function(slug) {
     alert(`記事の読み込みに失敗しました: ${e.message || e}`);
   }
 };
-
 
   // ===============================
   // 8. プレビュー
@@ -2017,6 +2134,42 @@ window.loadArticleForEdit = async function(slug) {
   .alp-divider{height:1px;background:#e5e7eb;margin:12px 0}
   .alp-help{font-size:12px;color:#6b7280;margin-top:4px}
   </style>
+
+<!-- GitHub 書き込み中の警告モーダル -->
+<div id="deployBusyModal" class="deploy-modal" style="
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.4);
+  z-index:9999;
+  align-items:center;
+  justify-content:center;
+">
+  <div style="
+    background:#fff;
+    padding:20px;
+    max-width:420px;
+    width:90%;
+    border-radius:8px;
+    box-shadow:0 4px 15px rgba(0,0,0,.3);
+  ">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <strong>保存処理の待機中です</strong>
+      <button type="button" onclick="closeDeployBusyModal()" style="
+        border:none;
+        background:transparent;
+        font-size:18px;
+        cursor:pointer;
+      ">×</button>
+    </div>
+    <p style="font-size:14px; line-height:1.5;">
+      現在バックグラウンドで GitHub への書き込み処理が進行中です。<br>
+      デプロイが完了するまで、しばらくお待ちください。
+    </p>
+  </div>
+</div>
+
+
 
 </body>
 </html>
