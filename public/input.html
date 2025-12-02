@@ -798,6 +798,22 @@ async function buildJsonAndBin(slug, article) {
     m.classList.toggle('text-red-600', isError);
   }
 
+  // ★ ここから追加：ステータス自動リセット
+  let statusResetTimer = null;
+
+  function scheduleStatusReset(ms = 90000) {
+    // 連続で保存してもタイマーが増えないように
+    if (statusResetTimer) {
+      clearTimeout(statusResetTimer);
+    }
+
+    statusResetTimer = setTimeout(() => {
+      // 好きな「初期状態」メッセージにしてOK
+      setMessage("準備OKです。保存や更新ができます。");
+    }, ms);
+  }
+
+
   // ===============================
   // 2. フォームロック系（新着/例外/非表示）
   // ===============================
@@ -1626,6 +1642,18 @@ function openDeployBusyModal() {
   if (modal) modal.style.display = 'flex';
 }
 
+
+    // すでにタイマーがあれば消しておく
+    if (deployModalTimer) {
+      clearTimeout(deployModalTimer);
+    }
+    // 60秒後に自動で閉じる
+    deployModalTimer = setTimeout(() => {
+      closeDeployBusyModal();
+    }, 90000);
+  }
+}
+
 window.closeDeployBusyModal = function () {
   const modal = document.getElementById('deployBusyModal');
   if (modal) modal.style.display = 'none';
@@ -1733,6 +1761,10 @@ window.saveArticle = async function () {
       `GitHub に記事を書き出しました（${docId}.json / ${docId}.bin ※鍵未設定時は BIN スキップ）。` +
       `　全文検索用データも更新しました（${count}件）。`
     );
+
+    // ★ 90秒後にニュートラルなステータスへ戻す
+    scheduleStatusReset(90000);
+
     ok = true;
   } catch (e) {
     console.error("[saveArticle] error:", e);
@@ -1797,6 +1829,10 @@ window.updateArticle = async function () {
       `記事（${currentArticleId}）・一覧・全文検索用データの更新が完了しました（登録記事数 ${count}件）。` +
       `　GitHub Actions により公開サイトへデプロイ中です（完了までは数分かかる場合があります）。`
     );
+
+    // ★ 90秒後にニュートラルなステータスへ戻す
+    scheduleStatusReset(90000);
+
     ok = true;
   } catch (e) {
     console.error("[updateArticle] error:", e);
