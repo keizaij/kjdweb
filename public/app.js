@@ -610,8 +610,11 @@ async function doSearchAndRender() {
     const isYearSpecific = year !== "all";
     const isCatSpecific  = cat  !== "all";
 
+    // 👉 デフォルトは grouped
     let mode = "grouped";
-    if (isYearSpecific || isCatSpecific) {
+
+    // 👉 カテゴリが絞られているときだけ flat にする
+    if (isCatSpecific) {
       mode = "flat";
     }
 
