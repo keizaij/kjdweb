@@ -774,6 +774,8 @@ async function loadArticles() {
       raw.id ||
       String(raw.issue || raw.issueNumber || '');
 
+window.allArticles = window.allArticles.filter(a => !a.isHidden);
+
     const publishDate =
       raw.publishDate ||
       raw.date ||
@@ -807,6 +809,7 @@ async function loadArticles() {
       category: catName,
       categoryIds: catIds,
       isNewArticle: !!(raw.isNewArticle ?? isNew),
+      isHidden: !!raw.isHidden,
     };
   });
 
