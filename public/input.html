@@ -1668,9 +1668,7 @@ function finishGitSave(ok) {
 
 
 
-// ===============================
-// 7. 保存 / 更新ボタン（JSON/BIN + manifest を GitHub に書き出し）
-// ===============================
+
 // ===============================
 // 7. 保存 / 更新ボタン（JSON/BIN + manifest を GitHub に書き出し）
 // ===============================
@@ -1680,6 +1678,9 @@ window.saveArticle = async function() {
   if (!canStartGitSave()) {
     return;
   }
+
+ // ★ ここで最初のステータス表示
+  setMessage("保存準備中…（GitHub へ書き込み中です）");
 
   try {
     const base = getFormData();
