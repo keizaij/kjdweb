@@ -314,41 +314,62 @@ async function loadCategoriesThenArticles() {
     // 4) マニフェスト形式なら title 等を整形
     let articles = [];
     if (fromManifest) {
-      // 期待する要素の形：
-      //   { slug:"215301", title:"...", path:"/build_plain_articles/215301.json",
-      //     publishDate:"YYYY/MM/DD", categoryIds:["..."] }
-      articles = rawList.map((x) => {
-        const slug = String(x.slug || x.articleId || x.id || "").trim();
-        const path =
-          x.path || (slug ? `/build_plain_articles/${slug}.json` : "");
-        const catNames = (x.categoryIds || []).map(
-          (id) => (categoryMap?.[id] || id)
-        );
-        return {
-          slug,
-          articleId: x.articleId || slug || "",
-          title: x.title || "",
-          publishDate: x.publishDate || x.date || "",
-          categoryIds: x.categoryIds || [],
-          category: catNames.join(", "),
-          _plainPath: path,
-        };
-      });
-    } else {
-      // ふつうの集約JSONだった場合
-      articles = rawList.map((a) => {
-        const slug = String(a.slug || a.articleId || a.id || "").trim();
-        const catNames = (a.categoryIds || []).map(
-          (id) => (categoryMap?.[id] || id)
-        );
-        return {
-          ...a,
-          slug,
-          articleId: a.articleId || slug || "",
-          category: catNames.join(", "),
-        };
-      });
-    }
+  // 期待する要素の形：
+  //   { slug:"215301", title:"...", path:"/build_plain_articles/215301.json",
+  //     publishDate:"YYYY/MM/DD", categoryIds:["..."], isHidden:true/false }
+  articles = rawList.map((x) => {
+    const slug = String(x.slug || x.articleId || x.id || "").trim();
+    const path =
+      x.path || (slug ? `/build_plain_articles/${slug}.json` : "");
+    const catNames = (x.categoryIds || []).map(
+      (id) => (categoryMap?.[id] || id)
+    );
+
+    // ★ isHidden を素直に引き継ぐ（文字列 "true" でも true 扱い）
+    const isHidden =
+      x.isHidden === true ||
+      x.isHidden === "true" ||
+      x.hidden === true ||
+      x.hidden === "true";
+
+    return {
+      slug,
+      articleId: x.articleId || slug || "",
+      title: x.title || "",
+      publishDate: x.publishDate || x.date || "",
+      categoryIds: x.categoryIds || [],
+      category: catNames.join(", "),
+      _plainPath: path,
+      isHidden,               // ★ 追加
+    };
+  });
+} else {
+  // ふつうの集約JSONだった場合
+  articles = rawList.map((a) => {
+    const slug = String(a.slug || a.articleId || a.id || "").trim();
+    const catNames = (a.categoryIds || []).map(
+      (id) => (categoryMap?.[id] || id)
+    );
+
+    const isHidden =
+      a.isHidden === true ||
+      a.isHidden === "true" ||
+      a.hidden === true ||
+      a.hidden === "true";
+
+    return {
+      ...a,
+      slug,
+      articleId: a.articleId || slug || "",
+      category: catNames.join(", "),
+      isHidden,               // ★ 追加
+    };
+  });
+}
+
+// ★ 非表示記事はここでまとめて除外
+articles = articles.filter(a => !a.isHidden);
+
 
     if (!articles.length) {
       setMsg(
