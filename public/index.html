@@ -1693,46 +1693,40 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 <script>
 (function () {
-  function delegateArticleClicks() {
-    const container = document.getElementById('searchResults');
-    if (!container) return;
+  function handleArticleClick(e) {
+    const linkEl = e.target.closest('a.article-link, a.js-article, .article-item a, [data-slug]');
+    if (!linkEl) return;
 
-    container.addEventListener('click', (e) => {
-      const linkEl = e.target.closest('a.article-link, a.js-article, .article-item a, [data-slug]');
-      if (!linkEl) return;
+    e.preventDefault();
+    e.stopPropagation();
 
-      e.preventDefault();
-      e.stopPropagation();
+    const slug =
+      linkEl.dataset?.slug ||
+      linkEl.getAttribute?.('data-slug') ||
+      linkEl.dataset?.articleId ||
+      linkEl.getAttribute?.('data-article-id') ||
+      linkEl.dataset?.id ||
+      linkEl.getAttribute?.('data-id') ||
+      (linkEl.getAttribute?.('href') || '').match(/slug=([^&#]+)/)?.[1] ||
+      '';
 
-      const slug =
-        linkEl.dataset?.slug ||
-        linkEl.getAttribute?.('data-slug') ||
-        linkEl.dataset?.articleId ||
-        linkEl.getAttribute?.('data-article-id') ||
-        linkEl.dataset?.id ||
-        linkEl.getAttribute?.('data-id') ||
-        (linkEl.getAttribute?.('href') || '').match(/slug=([^&#]+)/)?.[1] ||
-        '';
+    if (!slug) {
+      console.warn('[OPEN] no slug on click', linkEl);
+      alert('この記事の識別子(slug)が見つかりませんでした。data-slug などを設定してください。');
+      return;
+    }
 
-      if (!slug) {
-        console.warn('[OPEN] no slug on click', linkEl);
-        alert('この記事の識別子(slug)が見つかりませんでした。リスト生成時に data-slug を埋めてください。');
-        return;
-      }
-
-
-        openArticleCanvas?.(slug);
-
-    });
+    if (typeof openArticleCanvas === 'function') {
+      openArticleCanvas(slug);
+    } else {
+      console.warn('[OPEN] openArticleCanvas is not defined');
+    }
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', delegateArticleClicks);
-  } else {
-    delegateArticleClicks();
-  }
+  document.addEventListener('click', handleArticleClick);
 })();
 </script>
+
 
 
 <!-- これを </body> のちょっと上に置く（CSSとJSの想定IDに一致） -->
