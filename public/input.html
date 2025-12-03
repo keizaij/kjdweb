@@ -20,7 +20,6 @@
       border: 1px solid #ddd;
       border-radius: 5px;
       min-height: 500px; /* 固定高さを最小高さに変更 */
-      overflow-y: hidden;
       display: flex;
       flex-direction: column;
       background-color: white;
@@ -141,6 +140,76 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+/* サイズドロップダウンの表示ラベルを px にする */
+.ql-snow .ql-picker.ql-size .ql-picker-item[data-value="12px"]::before,
+.ql-snow .ql-picker.ql-size .ql-picker-label[data-value="12px"]::before {
+  content: "12px";
+}
+
+.ql-snow .ql-picker.ql-size .ql-picker-item[data-value="14px"]::before,
+.ql-snow .ql-picker.ql-size .ql-picker-label[data-value="14px"]::before {
+  content: "14px";
+}
+
+.ql-snow .ql-picker.ql-size .ql-picker-item[data-value="16px"]::before,
+.ql-snow .ql-picker.ql-size .ql-picker-label[data-value="16px"]::before {
+  content: "16px";
+}
+
+.ql-snow .ql-picker.ql-size .ql-picker-item[data-value="18px"]::before,
+.ql-snow .ql-picker.ql-size .ql-picker-label[data-value="18px"]::before {
+  content: "18px";
+}
+
+.ql-snow .ql-picker.ql-size .ql-picker-item[data-value="20px"]::before,
+.ql-snow .ql-picker.ql-size .ql-picker-label[data-value="20px"]::before {
+  content: "20px";
+}
+
+/* ==== 下線色ドロップダウンの見た目 ==== */
+.ql-snow .ql-picker.ql-underlineColor .ql-picker-label::before,
+.ql-snow .ql-picker.ql-underlineColor .ql-picker-item::before {
+  content: "U";
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+/* 黒・赤・青 それぞれの色 */
+.ql-snow .ql-picker.ql-underlineColor .ql-picker-item[data-value="black"]::before,
+.ql-snow .ql-picker.ql-underlineColor .ql-picker-label[data-value="black"]::before {
+  color: #000;
+}
+.ql-snow .ql-picker.ql-underlineColor .ql-picker-item[data-value="red"]::before,
+.ql-snow .ql-picker.ql-underlineColor .ql-picker-label[data-value="red"]::before {
+  color: #d00;
+}
+.ql-snow .ql-picker.ql-underlineColor .ql-picker-item[data-value="blue"]::before,
+.ql-snow .ql-picker.ql-underlineColor .ql-picker-label[data-value="blue"]::before {
+  color: #0056d6;
+}
+
+/* ==== 訂正線色ドロップダウンの見た目 ==== */
+.ql-snow .ql-picker.ql-strikeColor .ql-picker-label::before,
+.ql-snow .ql-picker.ql-strikeColor .ql-picker-item::before {
+  content: "S";
+  font-weight: bold;
+  text-decoration: line-through;
+}
+
+/* 黒・赤・青 それぞれの色 */
+.ql-snow .ql-picker.ql-strikeColor .ql-picker-item[data-value="black"]::before,
+.ql-snow .ql-picker.ql-strikeColor .ql-picker-label[data-value="black"]::before {
+  color: #000;
+}
+.ql-snow .ql-picker.ql-strikeColor .ql-picker-item[data-value="red"]::before,
+.ql-snow .ql-picker.ql-strikeColor .ql-picker-label[data-value="red"]::before {
+  color: #d00;
+}
+.ql-snow .ql-picker.ql-strikeColor .ql-picker-item[data-value="blue"]::before,
+.ql-snow .ql-picker.ql-strikeColor .ql-picker-label[data-value="blue"]::before {
+  color: #0056d6;
 }
 
 
@@ -755,76 +824,176 @@ async function buildJsonAndBin(slug, article) {
   refreshArticleIdList();
   });
 
+// ==== 線だけ色を変えるカスタムフォーマット ====
+
+// Quill の Inline 基底クラスを拝借
+const Inline = Quill.import('blots/inline');
+
+// 下線カラー用
+class UnderlineColor extends Inline {
+  static create(color) {
+    const node = super.create();
+    node.style.textDecorationLine = 'underline';
+    node.style.textDecorationColor = color;
+    return node;
+  }
+
+  static formats(node) {
+    return node.style.textDecorationColor || null;
+  }
+
+  format(name, value) {
+    if (name === UnderlineColor.blotName && value) {
+      this.domNode.style.textDecorationLine = 'underline';
+      this.domNode.style.textDecorationColor = value;
+    } else {
+      super.format(name, value);
+    }
+  }
+}
+UnderlineColor.blotName = 'underlineColor';
+UnderlineColor.tagName  = 'span';
+Quill.register(UnderlineColor, true);
+
+// 訂正線（取り消し線）カラー用
+class StrikeColor extends Inline {
+  static create(color) {
+    const node = super.create();
+    node.style.textDecorationLine = 'line-through';
+    node.style.textDecorationColor = color;
+    return node;
+  }
+
+  static formats(node) {
+    return node.style.textDecorationColor || null;
+  }
+
+  format(name, value) {
+    if (name === StrikeColor.blotName && value) {
+      this.domNode.style.textDecorationLine = 'line-through';
+      this.domNode.style.textDecorationColor = value;
+    } else {
+      super.format(name, value);
+    }
+  }
+}
+StrikeColor.blotName = 'strikeColor';
+StrikeColor.tagName  = 'span';
+Quill.register(StrikeColor, true);
+
+
+
+
+
 function initQuill() {
   const el = document.getElementById('quillEditor');
   if (!el) return;
+
+  // --- px 文字サイズ対応 ---
+  const Size = Quill.import('attributors/style/size');
+  Size.whitelist = ['12px', '14px', '16px', '18px', '20px'];
+  Quill.register(Size, true);
 
   quill = new Quill('#quillEditor', {
     theme: 'snow',
     placeholder: '記事本文をここに入力...',
     modules: {
-      toolbar: [
-        [{ header: [1, 2, 3, false] }],
-        ['bold', 'italic', 'underline', 'strike'],
-        [{ list: 'ordered' }, { list: 'bullet' }],
-        [{ indent: '-1' }, { indent: '+1' }],
-        [{ align: [] }],
-        ['link', 'image'],
-        ['clean']
-      ]
+      toolbar: {
+        container: [
+          // 文字サイズ
+          [{ size: ['12px', '14px', '16px', '18px', '20px'] }],
+
+          // 太字/斜体
+          ['bold', 'italic'],
+
+    // ★ 下線（色付き）／訂正線（色付き）
+    [{ underlineColor: ['black', 'red', 'blue'] }],
+    [{ strikeColor: ['black', 'red', 'blue'] }],
+
+          // 文字色＆背景色
+          [{ color: [] }, { background: [] }],
+
+          // 左・中央・右揃え
+          [{ align: [] }],
+
+          // リンク・画像
+          ['link', 'image'],
+
+          // 書式クリア
+          ['clean'],
+
+
+        ]
+      }
     }
   });
 
-  // Quill 初期化直後に「過去掲載link」ボタンを追加
-const tb = document.querySelector('.ql-toolbar');
-if (tb) {
-  // 既存のフォーマットグループ（<span class="ql-formats">）を取得
-  const groups = tb.querySelectorAll('.ql-formats');
-  const lastGroup = groups[groups.length - 1] || tb;
+  quill.setSelection(0, 0);
+  quill.format('size', '16px');
 
-  // 自前のグループを作って、その中にボタンを入れる
-  const wrapper = document.createElement('span');
-  wrapper.className = 'ql-formats ql-formats-internal';
-
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'ql-internal';
-  btn.textContent = '過去掲載link';
-  btn.title = '選択テキストを過去掲載記事リンク化';
-
-  btn.addEventListener('click', () => {
-    if (!quill) return;
-
-    const range = quill.getSelection();
-    if (!range || range.length === 0) {
-      alert('リンクにしたい文字（例：〇〇号）をドラッグ選択してから押してください。');
-      return;
+  // ★ ツールバーのハンドラ：選ばれた色で線だけ着色
+  const toolbar = quill.getModule('toolbar');
+  toolbar.addHandler('underlineColor', (value) => {
+    if (value) {
+      quill.format('underlineColor', value);
+    } else {
+      quill.format('underlineColor', false);
     }
-
-    let slug = prompt('リンク先の記事のID / slug を入力してください（例：215301）');
-    if (!slug) return;
-    slug = String(slug).trim();
-    if (!slug) return;
-
-    const text = quill.getText(range.index, range.length) || '';
-
-    quill.deleteText(range.index, range.length);
-
-    const html =
-      `<a href="#internal:${slug}"` +
-      ` class="article-link internal-link"` +
-      ` data-slug="${slug}">` +
-      (text || slug) +
-      `</a>`;
-
-    quill.clipboard.dangerouslyPasteHTML(range.index, html);
+  });
+  toolbar.addHandler('strikeColor', (value) => {
+    if (value) {
+      quill.format('strikeColor', value);
+    } else {
+      quill.format('strikeColor', false);
+    }
   });
 
-  wrapper.appendChild(btn);
+  // （ここから下に「過去掲載link」ボタン追加のコードが続く）
+  const tb = document.querySelector('.ql-toolbar');
+  if (tb) {
+    const groups = tb.querySelectorAll('.ql-formats');
+    const lastGroup = groups[groups.length - 1] || tb;
 
-  // 一番最後のフォーマットグループの「後ろ」に追加
-  lastGroup.insertAdjacentElement('afterend', wrapper);
-}
+    const wrapper = document.createElement('span');
+    wrapper.className = 'ql-formats ql-formats-internal';
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ql-internal';
+    btn.textContent = '過去掲載link';
+    btn.title = '選択テキストを過去掲載記事リンク化';
+
+    btn.addEventListener('click', () => {
+      if (!quill) return;
+
+      const range = quill.getSelection();
+      if (!range || range.length === 0) {
+        alert('リンクにしたい文字（例：〇〇号）をドラッグ選択してから押してください。');
+        return;
+      }
+
+      let slug = prompt('リンク先の記事のID / slug を入力してください（例：215301）');
+      if (!slug) return;
+      slug = String(slug).trim();
+      if (!slug) return;
+
+      const text = quill.getText(range.index, range.length) || '';
+
+      quill.deleteText(range.index, range.length);
+
+      const html =
+        `<a href="#internal:${slug}"` +
+        ` class="article-link internal-link"` +
+        ` data-slug="${slug}">` +
+        (text || slug) +
+        `</a>`;
+
+      quill.clipboard.dangerouslyPasteHTML(range.index, html);
+    });
+
+    wrapper.appendChild(btn);
+    lastGroup.insertAdjacentElement('afterend', wrapper);
+  }
 }
 
 
