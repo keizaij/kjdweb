@@ -367,8 +367,6 @@ async function loadCategoriesThenArticles() {
   });
 }
 
-// ★ 非表示記事はここでまとめて除外
-articles = articles.filter(a => !a.isHidden);
 
 
     if (!articles.length) {
