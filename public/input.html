@@ -132,7 +132,7 @@
       margin-bottom: 1em;
     }
 
-/* Quill toolbar の社内リンクボタンの表示調整 */
+/* Quill toolbar の過去掲載linkボタンの表示調整 */
 .ql-toolbar .ql-internal {
   font-size: 12px;
   padding: 2px 6px;
@@ -755,40 +755,78 @@ async function buildJsonAndBin(slug, article) {
   refreshArticleIdList();
   });
 
-  function initQuill() {
-    const el = document.getElementById('quillEditor');
-    if (!el) return;
+function initQuill() {
+  const el = document.getElementById('quillEditor');
+  if (!el) return;
 
-    quill = new Quill('#quillEditor', {
-      theme: 'snow',
-      placeholder: '記事本文をここに入力...',
-      modules: {
-        toolbar: [
-          [{ header: [1, 2, 3, false] }],
-          ['bold', 'italic', 'underline', 'strike'],
-          [{ list: 'ordered' }, { list: 'bullet' }],
-          [{ indent: '-1' }, { indent: '+1' }],
-          [{ align: [] }],
-          ['link', 'image'],
-          ['clean']
-        ]
-      }
-    });
-
-    // Quill 初期化直後に「社内リンク」ボタンだけは残す
-    const tb = document.querySelector('.ql-toolbar');
-    if (tb) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'ql-internal';
-      btn.textContent = '社内リンク';
-      btn.title = '選択テキストを社内記事リンク化';
-      btn.addEventListener('click', () => {
-        alert('いまはローカル専用モードなので「社内リンク」はまだ未実装です。後で静的サイト側に合わせて追加しましょう。');
-      });
-      tb.appendChild(btn);
+  quill = new Quill('#quillEditor', {
+    theme: 'snow',
+    placeholder: '記事本文をここに入力...',
+    modules: {
+      toolbar: [
+        [{ header: [1, 2, 3, false] }],
+        ['bold', 'italic', 'underline', 'strike'],
+        [{ list: 'ordered' }, { list: 'bullet' }],
+        [{ indent: '-1' }, { indent: '+1' }],
+        [{ align: [] }],
+        ['link', 'image'],
+        ['clean']
+      ]
     }
-  }
+  });
+
+  // Quill 初期化直後に「過去掲載link」ボタンを追加
+const tb = document.querySelector('.ql-toolbar');
+if (tb) {
+  // 既存のフォーマットグループ（<span class="ql-formats">）を取得
+  const groups = tb.querySelectorAll('.ql-formats');
+  const lastGroup = groups[groups.length - 1] || tb;
+
+  // 自前のグループを作って、その中にボタンを入れる
+  const wrapper = document.createElement('span');
+  wrapper.className = 'ql-formats ql-formats-internal';
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'ql-internal';
+  btn.textContent = '過去掲載link';
+  btn.title = '選択テキストを過去掲載記事リンク化';
+
+  btn.addEventListener('click', () => {
+    if (!quill) return;
+
+    const range = quill.getSelection();
+    if (!range || range.length === 0) {
+      alert('リンクにしたい文字（例：〇〇号）をドラッグ選択してから押してください。');
+      return;
+    }
+
+    let slug = prompt('リンク先の記事のID / slug を入力してください（例：215301）');
+    if (!slug) return;
+    slug = String(slug).trim();
+    if (!slug) return;
+
+    const text = quill.getText(range.index, range.length) || '';
+
+    quill.deleteText(range.index, range.length);
+
+    const html =
+      `<a href="#internal:${slug}"` +
+      ` class="article-link internal-link"` +
+      ` data-slug="${slug}">` +
+      (text || slug) +
+      `</a>`;
+
+    quill.clipboard.dangerouslyPasteHTML(range.index, html);
+  });
+
+  wrapper.appendChild(btn);
+
+  // 一番最後のフォーマットグループの「後ろ」に追加
+  lastGroup.insertAdjacentElement('afterend', wrapper);
+}
+}
+
 
   function setMessage(msg, isError = false) {
     const m = document.getElementById('message');
@@ -801,7 +839,7 @@ async function buildJsonAndBin(slug, article) {
   // ★ ここから追加：ステータス自動リセット
   let statusResetTimer = null;
 
-  function scheduleStatusReset(ms = 90000) {
+  function scheduleStatusReset(ms = 120000) {
     // 連続で保存してもタイマーが増えないように
     if (statusResetTimer) {
       clearTimeout(statusResetTimer);
@@ -1643,16 +1681,6 @@ function openDeployBusyModal() {
 }
 
 
-    // すでにタイマーがあれば消しておく
-    if (deployModalTimer) {
-      clearTimeout(deployModalTimer);
-    }
-    // 60秒後に自動で閉じる
-    deployModalTimer = setTimeout(() => {
-      closeDeployBusyModal();
-    }, 90000);
-  }
-
 
 window.closeDeployBusyModal = function () {
   const modal = document.getElementById('deployBusyModal');
@@ -1763,7 +1791,7 @@ window.saveArticle = async function () {
     );
 
     // ★ 90秒後にニュートラルなステータスへ戻す
-    scheduleStatusReset(90000);
+    scheduleStatusReset(120000);
 
     ok = true;
   } catch (e) {
@@ -1827,11 +1855,11 @@ window.updateArticle = async function () {
 
     setMessage(
       `記事（${currentArticleId}）・一覧・全文検索用データの更新が完了しました（登録記事数 ${count}件）。` +
-      `　GitHub Actions により公開サイトへデプロイ中です（完了までは数分かかる場合があります）。`
+      `　GitHub Actions により公開サイトへデプロイ中です（記事編集は出来ますが、次の保存まで2分お待ちください。）。`
     );
 
     // ★ 90秒後にニュートラルなステータスへ戻す
-    scheduleStatusReset(90000);
+    scheduleStatusReset(120000);
 
     ok = true;
   } catch (e) {
