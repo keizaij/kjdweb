@@ -130,17 +130,20 @@ window.addEventListener('unhandledrejection', e => {
   --ad-h:72px; /* 広告の高さ（PC基準）*/
 }
 
-body{font-family:Arial,sans-serif;font-size:15px;background:#f4f4f4;color:#333;}
+body{
+  font-family:Arial,sans-serif;
+  font-size:15px;
+  background:#f4f4f4;
+  color:#333;
+}
 
-/* ★ 固定ヘッダー全体：横スクロールを殺さない */
+/* ヘッダー＋フィルターを含む固定コンテナ */
 .fixed-container{
   position:sticky;
   top:0;
   z-index:1000;
-  overflow-x:auto;                 /* ← ここ重要（ヘッダー/フィルターが切れずに横スクロール） */
-  overflow-y:hidden;
-  -webkit-overflow-scrolling:touch;
 }
+
 
 /* Header */
 .header-bar{
