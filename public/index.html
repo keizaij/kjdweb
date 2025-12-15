@@ -77,7 +77,42 @@ window.addEventListener('unhandledrejection', e => {
 })();
 </script>
 
+<script>
+  // window に載せたものを、この script スコープ用に束縛する
+  const auth = window.auth;
+  const db   = window.db;
+</script>
 
+<script>
+(function guardMemberPage() {
+  const LOGIN_URL = window.LOGIN_URL || 'login.html';
+
+  // auth がまだ無い時の保険（読み込み順で事故るのを防ぐ）
+  if (!window.auth || !window.auth.onAuthStateChanged) {
+    console.error('[auth] window.auth is not ready');
+    return;
+  }
+
+  window.auth.onAuthStateChanged(async (user) => {
+    if (!user) {
+      // 未ログイン → loginへ
+      location.replace(LOGIN_URL);
+      return;
+    }
+
+    // ログイン済み → ここで初めてページの本処理を開始
+    console.log('[auth] signed in:', user.uid);
+
+    // 例）あなたの記事読み込み開始関数があるならここで呼ぶ
+    // await loadArticles();
+  }, (err) => {
+    console.error('[auth] onAuthStateChanged error', err);
+    // ここで落ちると保護が壊れるので、表示も変えると親切
+    const el = document.getElementById('initialLoadingMessage');
+    if (el) el.textContent = '認証状態の取得に失敗しました（再読み込みしてください）';
+  });
+})();
+</script>
 
    <style>
 /* ========== Base (PC) ========== */
@@ -500,19 +535,17 @@ async function ensureMiniSearchLoaded(timeoutMs = 8000) {
 <script>
 
     // --- ログアウト関数 ---
-    function doLogout(event) {
-        event.preventDefault();
-        const confirmLogout = confirm('ログアウトしますか？');
-        if (confirmLogout) {
-            auth.signOut().then(() => {
-                // ログアウト成功後、onAuthStateChangedが検知してログインページへリダイレクトされる
-                console.log('ログアウト成功');
-            }).catch((error) => {
-                console.error("ログアウト中にエラーが発生しました:", error);
-                alert("ログアウトに失敗しました。");
-            });
-        }
-    }
+function doLogout(event) {
+  event.preventDefault();
+  if (confirm('ログアウトしますか？')) {
+    window.auth.signOut().then(() => {
+      console.log('ログアウト成功');
+    }).catch((error) => {
+      console.error("ログアウト中にエラーが発生しました:", error);
+      alert("ログアウトに失敗しました。");
+    });
+  }
+}
 
 
 
