@@ -166,6 +166,16 @@ main{padding-left:12px;padding-right:12px;padding-top:var(--content-padding-top)
 .auto-issue-link.pending{ color:#9ca3af; pointer-events:none; text-decoration:none; }
 
 
+
+/* flex子要素が「縮めない」事故を防ぐ */
+.header-bar,
+.header-bar .left-section,
+.header-bar .tagline,
+.header-bar .top-links {
+  min-width: 0;
+}
+
+
 /* Modal */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:2000;justify-content:center;align-items:center;}
 .modal-content{background:#fff;padding:20px;border-radius:8px;width:90%;max-width:900px;max-height:90%;overflow-y:auto;position:relative;}
