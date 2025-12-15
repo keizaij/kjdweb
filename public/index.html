@@ -189,7 +189,7 @@ body{
   flex:0 0 auto;
 }
 
-/* ログアウトを左端に */
+/* ログアウトを右端に */
 .header-bar .top-links{
   order:-1;
   display:flex;
@@ -197,7 +197,7 @@ body{
   min-width:50px;
 }
 
-/* 左側 */
+/* 右側 */
 .header-bar .left-section{
   display:flex;
   align-items:center;
@@ -605,22 +605,22 @@ body.devtools-open #articleModal .modal-content .content {
 </head>
 <body>
     <div class="fixed-container">
-        <div class="header-bar">
-          <div class="header-inner">
-            <div class="left-section">
-                <div class="logo-container">
-                    <a href="http://www.economicjournal.co.jp/" target="_blank">
-                         <img src="https://lh3.googleusercontent.com/d/1k-sttTgkKJv6eZE9X2N34fSQFjXWpH8u" alt="economic jornal">
-                    </a>
-                </div>
-                <div class="tagline">
-                    Members Page
-                </div>
-            </div>
-            <div class="top-links">
-                <a href="#" id="logoutLink" onclick="doLogout(event)">ログアウト</a>
- </div>
-        </div>
+<div class="header-bar">
+  <div class="header-inner">
+    <div class="left-section">
+      <div class="logo-container">
+        <a href="http://www.economicjournal.co.jp/" target="_blank">
+          <img src="https://lh3.googleusercontent.com/d/1k-sttTgkKJv6eZE9X2N34fSQFjXWpH8u" alt="economic jornal">
+        </a>
+      </div>
+      <div class="tagline">Members Page</div>
+    </div>
+
+    <div class="top-links">
+      <a href="#" id="logoutLink" onclick="doLogout(event)">ログアウト</a>
+    </div>
+  </div>
+</div>
         <div class="filter-bar">
             <div class="filter-bar-content">
                 <input type="text" id="searchInput" placeholder="キーワードで検索"
@@ -635,7 +635,6 @@ body.devtools-open #articleModal .modal-content .content {
                 <button onclick="window.resetSearch()">リセット</button>
             </div>
         </div>
-    </div>
     </div>
 
 <!-- ▼ Filter bar と 記事一覧の間 -->
