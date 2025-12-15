@@ -428,6 +428,47 @@ body.devtools-open #articleModal .modal-content .content {
   color: #555;
 }
 
+/* 最新号CTA（Tailwindなしで完結） */
+#latest-issue-cta{
+  margin: 12px 0;
+  padding-left: 45px;   /* ← main と同じ左余白に揃える */
+  padding-right: 20px;
+}
+
+.mobile-mode #latest-issue-cta{
+  padding-left: 12px;   /* ← mobile-mode の main と同じ */
+  padding-right: 12px;
+}
+
+#latest-issue-cta .latest-issue-row{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;      /* スマホで折り返しても崩れない */
+}
+
+#btn-latest-issue{
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 16px;
+  font-weight: 700;
+  cursor: pointer;
+  background: #2563eb;
+  color: #fff;
+}
+#btn-latest-issue:hover{ background:#1d4ed8; }
+
+#latest-issue-cta-sub{
+  font-size: 12px;
+  color: #6b7280;
+  white-space: nowrap;  /* 横に並べたいならこれ */
+}
+
+/* それでもスマホで窮屈なら、注釈だけ折り返し許可 */
+@media (max-width: 420px){
+  #latest-issue-cta-sub{ white-space: normal; }
+}
+
 
 
 </style>
@@ -470,32 +511,13 @@ body.devtools-open #articleModal .modal-content .content {
     </div>
 
 <!-- ▼ Filter bar と 記事一覧の間 -->
-<div
-  id="latest-issue-cta"
-  class="mx-auto max-w-6xl px-3 sm:px-4 my-3"
->
-  <div
-    class="flex items-center gap-3 ml-2 sm:ml-4"
-  >
-    <button
-      id="btn-latest-issue"
-      type="button"
-      class="rounded-xl px-5 py-3 font-bold shadow-md hover:shadow-lg transition
-             bg-blue-600 text-white hover:bg-blue-700"
-    >
-      最新号を読む
-    </button>
-
-    <div
-      id="latest-issue-cta-sub"
-      class="text-xs text-gray-500"
-    >
-      （ビューアへ移動します）
-    </div>
+<div id="latest-issue-cta">
+  <div class="latest-issue-row">
+    <button id="btn-latest-issue" type="button">最新号を読む</button>
+    <span id="latest-issue-cta-sub">（ビューアへ移動します）</span>
   </div>
 </div>
 <!-- ▲ ここまで -->
-
 
 
     <main>
