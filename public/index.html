@@ -145,42 +145,87 @@ body{
 }
 
 
-/* Header */
+/* ================= Header ================= */
+
+/* 外側：帯（背景）専用。常に画面いっぱい */
 .header-bar{
   height:var(--header-height);
   background:#002b5c;
   color:#fff;
+
   display:flex;
-  justify-content:space-between;
   align-items:center;
-  padding:0 20px;
+
+  padding:0;              /* ← ここ重要：外側は余白なし */
+  width:100vw;            /* ← 常に画面いっぱい */
+  overflow:hidden;        /* ← 帯は切らない */
+}
+
+/* 内側：横スクロール担当 */
+.header-inner{
+  display:flex;
+  align-items:center;
+  gap:10px;
+
+  padding:0 20px;         /* ← 今までの左右余白はここへ */
   flex-wrap:nowrap;
 
-  /* ★ ここから追加 */
-  width:max-content;               /* 中身幅ぶん横に伸ばす */
-  min-width:100%;                  /* 画面より短いときは100%に */
+  width:max-content;      /* ← 中身ぶん横に伸びる */
+  overflow-x:auto;
+  overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;
 }
-.header-bar .left-section{display:flex;align-items:center;gap:10px;flex:0 0 auto;}
-.header-bar .logo-container{display:flex;align-items:center;min-width:50px;flex:0 0 auto;}
-.header-bar .logo-container img{height:25px !important;width:auto !important;object-fit:contain;}
-.header-bar .tagline{
-  font-size:16px;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  text-align:left;
-  flex:0 0 auto;                   /* ← 伸縮で潰れない */
-  padding:0;
-  transform:none;
+
+/* スクロールバー非表示（任意） */
+.header-inner::-webkit-scrollbar{ height:0; }
+.header-inner{ scrollbar-width:none; }
+
+/* 中身は縮まない */
+.header-inner > *{
+  flex:0 0 auto;
 }
+
+/* ログアウトを左端に */
 .header-bar .top-links{
+  order:-1;
   display:flex;
   align-items:center;
   min-width:50px;
-  justify-content:flex-end;
-  flex:0 0 auto;                   /* ← 伸縮で潰れない */
 }
-.header-bar .top-links a{color:#fff;text-decoration:none;border:.3px solid #fff;padding:.5px 3px;border-radius:2px;font-size:12px;margin-left:5px;}
+
+/* 左側 */
+.header-bar .left-section{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+.header-bar .logo-container{
+  display:flex;
+  align-items:center;
+  min-width:50px;
+}
+
+.header-bar .logo-container img{
+  height:25px !important;
+  width:auto !important;
+  object-fit:contain;
+}
+
+.header-bar .tagline{
+  font-size:16px;
+  white-space:nowrap;
+}
+
+.header-bar .top-links a{
+  color:#fff;
+  text-decoration:none;
+  border:.3px solid #fff;
+  padding:.5px 3px;
+  border-radius:2px;
+  font-size:12px;
+  margin-left:5px;
+}
 
 /* Filter bar */
 .filter-bar{
@@ -549,6 +594,7 @@ body.devtools-open #articleModal .modal-content .content {
 <body>
     <div class="fixed-container">
         <div class="header-bar">
+          <div class="header-inner">
             <div class="left-section">
                 <div class="logo-container">
                     <a href="http://www.economicjournal.co.jp/" target="_blank">
@@ -577,6 +623,7 @@ body.devtools-open #articleModal .modal-content .content {
                 <button onclick="window.resetSearch()">リセット</button>
             </div>
         </div>
+    </div>
     </div>
 
 <!-- ▼ Filter bar と 記事一覧の間 -->
