@@ -139,10 +139,14 @@ body{
 
 /* ヘッダー＋フィルターを含む固定コンテナ */
 .fixed-container{
-  position:sticky;
-  top:0;
-  z-index:1000;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+
+  display: flex;
+  flex-direction: column;   /* ← これが決定打 */
 }
+
 
 
 /* ================= Header ================= */
