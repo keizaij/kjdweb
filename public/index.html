@@ -468,6 +468,26 @@ body.devtools-open #articleModal .modal-content .content {
             </div>
         </div>
     </div>
+
+<!-- ▼ ここを Filter bar と 記事一覧の間に追加 -->
+<div id="latest-issue-cta" class="mx-auto max-w-6xl px-3 sm:px-4 my-3">
+  <button
+    id="btn-latest-issue"
+    type="button"
+    class="w-full sm:w-auto rounded-xl px-5 py-3 font-bold shadow-md hover:shadow-lg transition
+           bg-blue-600 text-white hover:bg-blue-700"
+  >
+    最新号を読む
+  </button>
+
+  <div id="latest-issue-cta-sub" class="text-xs text-gray-500 mt-1">
+    （ビューアへ移動します）
+  </div>
+</div>
+<!-- ▲ ここまで -->
+
+
+
     <main>
         <div id="searchResults">
             <div class="auth-message" id="initialLoadingMessage">認証を確認中...</div>
@@ -1778,6 +1798,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 <!-- ★必ずこの後に app.js を読む -->
 <script src="/app.js?v=2025-11-27-4"></script>
 
+<script>
+  (() => {
+    const VIEWER_BASE = "https://kjd-viewer-assets.pages.dev/";
+    const btn = document.getElementById("btn-latest-issue");
+    if (!btn) return;
+    btn.addEventListener("click", () => location.href = VIEWER_BASE);
+  })();
+</script>
+</body>
 
 
 </body>
