@@ -906,9 +906,9 @@ function initQuill() {
           // 太字/斜体
           ['bold', 'italic'],
 
-    // ★ 下線（色付き）／訂正線（色付き）
-    [{ underlineColor: ['black', 'red', 'blue'] }],
-    [{ strikeColor: ['black', 'red', 'blue'] }],
+          // ★ 下線（色付き）／訂正線（色付き）
+          [{ underlineColor: ['black', 'red', 'blue'] }],
+          [{ strikeColor: ['black', 'red', 'blue'] }],
 
           // 文字色＆背景色
           [{ color: [] }, { background: [] }],
@@ -921,8 +921,6 @@ function initQuill() {
 
           // 書式クリア
           ['clean'],
-
-
         ]
       }
     }
@@ -934,18 +932,12 @@ function initQuill() {
   // ★ ツールバーのハンドラ：選ばれた色で線だけ着色
   const toolbar = quill.getModule('toolbar');
   toolbar.addHandler('underlineColor', (value) => {
-    if (value) {
-      quill.format('underlineColor', value);
-    } else {
-      quill.format('underlineColor', false);
-    }
+    if (value) quill.format('underlineColor', value);
+    else quill.format('underlineColor', false);
   });
   toolbar.addHandler('strikeColor', (value) => {
-    if (value) {
-      quill.format('strikeColor', value);
-    } else {
-      quill.format('strikeColor', false);
-    }
+    if (value) quill.format('strikeColor', value);
+    else quill.format('strikeColor', false);
   });
 
   // （ここから下に「過去掲載link」ボタン追加のコードが続く）
@@ -994,8 +986,54 @@ function initQuill() {
     wrapper.appendChild(btn);
     lastGroup.insertAdjacentElement('afterend', wrapper);
   }
-}
 
+  // ===============================
+  // ★貼り付け時の整形（行頭スペース保持 + （####号）青）
+  //  ※ pasteハンドラは “これ1本だけ” にする
+  // ===============================
+  (() => {
+    const EM = "\u2003"; // EM SPACE（見た目が全角1個ぶんに近い）
+
+    quill.root.addEventListener("paste", (e) => {
+      // デバッグ（必要なら消してOK）
+      console.log("[paste-fix] fired");
+
+      const cd = e.clipboardData;
+      if (!cd) return;
+
+      let plain = cd.getData("text/plain") || "";
+      if (!plain) return;
+
+      // Quill 標準貼り付けを止めて、こちらで入れる
+      e.preventDefault();
+      e.stopPropagation();
+
+      plain = plain.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+      // 行頭の「半角スペース / NBSP / 全角スペース」を EM SPACE に統一
+      const fixed = plain
+        .split("\n")
+        .map(line => line.replace(/^[ \u00A0\u3000]+/g, m => EM.repeat(m.length)))
+        .join("\n");
+
+      const range = quill.getSelection(true) || { index: quill.getLength() - 1, length: 0 };
+      if (range.length) quill.deleteText(range.index, range.length, "user");
+
+      quill.insertText(range.index, fixed, "user");
+      quill.setSelection(range.index + fixed.length, 0, "silent");
+
+      // （####号）だけ青
+      const text = quill.getText();
+      const re = /（(\d{4}号)）/g;
+      let m;
+      while ((m = re.exec(text)) !== null) {
+        const start = m.index + 1; // "（" の次
+        const len = m[1].length;   // "2025号"
+        quill.formatText(start, len, { color: "#0066cc" }, "silent");
+      }
+    }, true); // capture=true
+  })();
+}
 
   function setMessage(msg, isError = false) {
     const m = document.getElementById('message');
@@ -1234,7 +1272,9 @@ function initQuill() {
 
   function buildHtmlFromQuill() {
     if (!quill) return '';
-    let raw = quill.root.innerHTML.replace(/\u200B|\uFEFF/g, '');
+    let raw = quill.root.innerHTML
+  .replace(/\u200B|\uFEFF/g, '')
+  .replace(/\u2003/g, '\u3000'); // ★EM SPACE → 全角スペース
     const normalized = normalizeLeadingSpacesInBlocks(raw);
     const safeBody = DOMPurify.sanitize(normalized);
     const entityBody = safeBody
