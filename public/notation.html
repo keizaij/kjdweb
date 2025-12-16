@@ -53,6 +53,40 @@
       padding:.5px 6px;border-radius:2px;font-size:12px;margin-left:6px;
     }
 
+/* === Header: 縦センターを確実にする（横スクロール構造は維持） === */
+
+/* スクロール箱の.header-bar自体をflex化して縦センター */
+.header-bar{
+  display: flex !important;
+  align-items: center !important;
+}
+
+/* 中身をヘッダー高さに合わせる（上寄り防止） */
+.header-inner{
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+/* 左右ブロックも縦センター */
+.header-bar .left-section,
+.header-bar .logo-container,
+.header-bar .top-links{
+  align-items: center !important;
+}
+
+/* imgのベースライン由来のズレを消す */
+.header-bar .logo-container img{
+  display: block !important;
+}
+
+/* 文字の行高が原因の上寄りを抑える */
+.header-bar .tagline,
+.header-bar .top-links a{
+  line-height: 1 !important;
+}
+
+
     /* 帯の下：右上に戻るボタン（見切れない） */
     .subbar{
       background:#f4f4f4;
