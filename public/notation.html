@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>特定商取引法表示</title>
+
+  <!-- Firebase compat CDN (indexと同じ版) -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
+
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    :root{ --header-height:40px; }
+
+    body{
+      font-family: Arial, sans-serif;
+      font-size: 15px;
+      background:#f4f4f4;
+      color:#333;
+    }
+
+    /* indexと同じ：上に固定される帯 */
+    .fixed-container{position:sticky;top:0;z-index:1000;}
+
+    /* Header：帯は常に100% + 中身だけ横スクロール（見切れ対策） */
+    .header-bar{
+      height: var(--header-height);
+      background:#002b5c;
+      color:#fff;
+      width:100%;
+      overflow-x:auto;
+      overflow-y:hidden;
+      -webkit-overflow-scrolling:touch;
+    }
+    .header-inner{
+      display:flex;
+      align-items:center;           /* ← 上寄りにならない */
+      justify-content:space-between;
+      width:max-content;
+      min-width:100%;
+      padding:0 20px;
+      white-space:nowrap;
+    }
+    .header-bar .left-section{display:flex;align-items:center;gap:10px;flex:0 0 auto;}
+    .header-bar .logo-container{display:flex;align-items:center;min-width:50px;flex:0 0 auto;}
+    .header-bar .logo-container img{height:25px !important;width:auto !important;object-fit:contain;}
+    .header-bar .tagline{font-size:16px;white-space:nowrap;flex:0 0 auto;}
+    .header-bar .top-links{display:flex;align-items:center;justify-content:flex-end;flex:0 0 auto;}
+    .header-bar .top-links a{
+      color:#fff;text-decoration:none;border:.3px solid #fff;
+      padding:.5px 6px;border-radius:2px;font-size:12px;margin-left:6px;
+    }
+
+    /* 帯の下：右上に戻るボタン（見切れない） */
+    .subbar{
+      background:#f4f4f4;
+      padding:10px 20px 0;
+      display:flex;
+      justify-content:flex-end;
+      align-items:center;
+    }
+    .back-btn{
+      display:inline-block;
+      text-decoration:none;
+      background:#002b5c;
+      color:#fff;
+      border:1px solid rgba(0,0,0,.08);
+      padding:8px 12px;
+      border-radius:8px;
+      font-size:13px;
+      line-height:1;
+      white-space:nowrap;
+    }
+    .back-btn:hover{opacity:.9;}
+
+    /* 本文 */
+    main{
+      padding:14px 20px 40px;
+      max-width: 980px;
+      margin: 0 auto;
+    }
+
+    h1{
+      font-size:22px;
+      margin: 10px 0 14px;
+      color:#111;
+    }
+
+    .card{
+      background:#fff;
+      border:1px solid #ddd;
+      border-radius:10px;
+      overflow:hidden;
+    }
+
+    .row{
+      display:grid;
+      grid-template-columns: 240px 1fr;
+      border-top:1px solid #eee;
+    }
+    .row:first-child{border-top:none;}
+    .k{
+      background:#fafafa;
+      padding:12px 14px;
+      font-weight:bold;
+      color:#222;
+      border-right:1px solid #eee;
+    }
+    .v{
+      padding:12px 14px;
+      white-space:pre-line; /* 改行を生かす */
+      line-height:1.6;
+    }
+
+    /* 小さい画面 */
+    @media (max-width: 720px){
+      :root{ --header-height:22px; }
+      .header-inner{padding:0 12px;}
+      .header-bar .logo-container img{height:14px !important;}
+      .header-bar .tagline{font-size:13px;}
+      .header-bar .top-links a{font-size:10px;padding:4px 6px;}
+
+      .subbar{padding:10px 12px 0;}
+      main{padding:12px 12px 36px;}
+      h1{font-size:20px;}
+
+      .row{grid-template-columns: 1fr;}
+      .k{border-right:none;border-bottom:1px solid #eee;}
+    }
+  </style>
+
+  <script>
+  // ===== Firebase init (indexと同じ値) =====
+  (() => {
+    "use strict";
+    const firebaseConfig = {
+      apiKey: "AIzaSyAJT3EnF4s6kfU6RuC9nJvOrs9FtG_RMR0",
+      authDomain: "economic-journals-digital.firebaseapp.com",
+      projectId: "economic-journals-digital",
+      storageBucket: "economic-journals-digital.appspot.com",
+      messagingSenderId: "1032175762907",
+      appId: "1:1032175762907:web:e46fca907bb52c9b5fbbfe"
+    };
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    window.auth = firebase.auth();
+    window.LOGIN_URL = 'login.html';
+  })();
+  </script>
+
+  <script>
+  // ===== 会員ページ保護（不要ならこのscript丸ごと削除OK） =====
+  (function guardMemberPage() {
+    const LOGIN_URL = window.LOGIN_URL || 'login.html';
+    if (!window.auth || !window.auth.onAuthStateChanged) return;
+
+    window.auth.onAuthStateChanged((user) => {
+      if (!user) location.replace(LOGIN_URL);
+    });
+  })();
+  </script>
+</head>
+
+<body>
+  <div class="fixed-container">
+    <!-- Header（indexと同じ帯だけ） -->
+    <div class="header-bar">
+      <div class="header-inner">
+        <div class="left-section">
+          <div class="logo-container">
+            <a href="http://www.economicjournal.co.jp/" target="_blank" rel="noopener">
+              <img src="https://lh3.googleusercontent.com/d/1k-sttTgkKJv6eZE9X2N34fSQFjXWpH8u" alt="economic jornal">
+            </a>
+          </div>
+          <div class="tagline">Members Page</div>
+        </div>
+
+        <div class="top-links">
+          <!-- 「特定商取引法表示」のリンク文字は不要なので置かない -->
+          <a href="#" onclick="(function(e){e.preventDefault(); if(confirm('ログアウトしますか？')) window.auth.signOut();})(event)">ログアウト</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 帯下 右上：会員トップへ戻る -->
+  <div class="subbar">
+    <a class="back-btn" href="index.html">会員トップへ戻る</a>
+  </div>
+
+  <main>
+    <h1>特定商取引法表示</h1>
+
+    <div class="card">
+      <div class="row">
+        <div class="k">販売主</div>
+        <div class="v">株式会社 経済ジャーナル
+〒041-0811
+函館市富岡町1丁目32番12号
+TEL：0138-41-1117　FAX：0138-41-2121</div>
+      </div>
+
+      <div class="row">
+        <div class="k">販売責任者</div>
+        <div class="v">齊藤 義弘</div>
+      </div>
+
+      <div class="row">
+        <div class="k">注文方法</div>
+        <div class="v">サイトより購読申込</div>
+      </div>
+
+      <div class="row">
+        <div class="k">商品またはサービスの引き渡し時期</div>
+        <div class="v">お客様入金完了後、即時デジタルコンテンツのサービス利用可能。毎週金曜日に指定住所へ冊子を郵送。</div>
+      </div>
+
+      <div class="row">
+        <div class="k">商品またはサービス代金の決済手段</div>
+        <div class="v">クレジットカード
+コンビニエンスストア払い
+銀行ネット決済（ネットバンキング)</div>
+      </div>
+
+      <div class="row">
+        <div class="k">商品またはサービス代金の決済時期</div>
+        <div class="v">前払い</div>
+      </div>
+
+      <div class="row">
+        <div class="k">サービス代金以外に必要な費用</div>
+        <div class="v">刊行物は初回のみ初期費用￥3,000</div>
+      </div>
+
+      <div class="row">
+        <div class="k">商品またはサービスの返品（キャンセル）取扱条件</div>
+        <div class="v">中途解約の場合、返金は不可</div>
+      </div>
+
+      <div class="row">
+        <div class="k">不良品、サービス不良の取扱条件</div>
+        <div class="v">商品が異なるものや不具合のあるものは、当店の送料負担にて交換。</div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
