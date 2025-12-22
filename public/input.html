@@ -1388,43 +1388,47 @@ async function saveImagesToGitHub(images, token) {
 
 
   // ★★ 画像の base64 を /photo/{号}/ファイル名 に差し替える処理 ★★
-  function processHtmlAndImages(issueRaw, slug, fullHtml) {
-    // issueRaw: "2168" など（なければ slug を使う）
-    const digits = String(issueRaw || '').replace(/\D/g, '');
-    const issueFolder = digits || slug;
-    const baseName    = digits || slug;
+function processHtmlAndImages(issueRaw, slug, fullHtml) {
+  const digits = String(issueRaw || '').replace(/\D/g, '');
+  const issueFolder = digits || 'misc';
 
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(fullHtml, "text/html");
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(fullHtml, "text/html");
 
-    const imgs = Array.from(doc.querySelectorAll('img'));
-    const images = [];
-    let index = 1;
+  const imgs = Array.from(doc.querySelectorAll('img'));
+  const images = [];
+  let index = 1;
 
-    for (const img of imgs) {
-      const src = img.getAttribute('src') || '';
-      if (!src.startsWith('data:image/')) continue;
+  for (const img of imgs) {
+    const src = img.getAttribute('src') || '';
+    if (!src.startsWith('data:image/')) continue;
 
-      const m = src.match(/^data:image\/(png|jpe?g|gif|webp);base64,(.+)$/i);
-      if (!m) continue;
+    // ★ webp を含める
+    const m = src.match(/^data:image\/(png|jpe?g|gif|webp);base64,(.+)$/i);
+    if (!m) continue;
 
-      let ext = m[1].toLowerCase();
-      if (ext === 'jpeg') ext = 'jpg';
-      const b64 = m[2];
+    let ext = m[1].toLowerCase();
+    if (ext === 'jpeg') ext = 'jpg';
+    const b64 = m[2];
 
-      const numStr = String(index).padStart(2, '0');
-      const fileName = `${baseName}-${numStr}.${ext}`;
-      const repoPath = `photo/${issueFolder}/${fileName}`;  // GitHub 上のパス
-      const publicPath = `/photo/${issueFolder}/${fileName}`; // 本番サイトでのパス
+    const numStr = String(index).padStart(2, '0');
 
-      images.push({
-        path: repoPath,
-        contentB64: b64
-      });
+    // ★ 記事ごとにフォルダを分ける（衝突しない）
+    const fileName = `${slug}-${numStr}.${ext}`;
+    const repoPath = `photo/${issueFolder}/${slug}/${fileName}`;
+    const publicPath = `/photo/${issueFolder}/${slug}/${fileName}`;
 
-      img.setAttribute('src', publicPath);
-      index++;
-    }
+    images.push({ path: repoPath, contentB64: b64 });
+    img.setAttribute('src', publicPath);
+    index++;
+  }
+
+  const bodyHtml = doc.body.innerHTML || '';
+  const newHtml  = ARTICLE_STYLE + bodyHtml;
+
+  return { html: newHtml, images };
+}
+
 
     // style は head に分離されるので、body 部分だけ取って再度 ARTICLE_STYLE を付け直す
     const bodyHtml = doc.body.innerHTML || '';
