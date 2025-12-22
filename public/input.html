@@ -1391,9 +1391,10 @@ async function saveImagesToGitHub(images, token) {
 function processHtmlAndImages(issueRaw, slug, fullHtml) {
   const digits = String(issueRaw || '').replace(/\D/g, '');
   const issueFolder = digits || 'misc';
+  const articleFolder = String(slug || "no-slug");
 
   const parser = new DOMParser();
-  const doc = parser.parseFromString(fullHtml, "text/html");
+  const doc = parser.parseFromString(fullHtml || "", "text/html");
 
   const imgs = Array.from(doc.querySelectorAll('img'));
   const images = [];
@@ -1403,7 +1404,6 @@ function processHtmlAndImages(issueRaw, slug, fullHtml) {
     const src = img.getAttribute('src') || '';
     if (!src.startsWith('data:image/')) continue;
 
-    // ★ webp を含める
     const m = src.match(/^data:image\/(png|jpe?g|gif|webp);base64,(.+)$/i);
     if (!m) continue;
 
@@ -1413,10 +1413,9 @@ function processHtmlAndImages(issueRaw, slug, fullHtml) {
 
     const numStr = String(index).padStart(2, '0');
 
-    // ★ 記事ごとにフォルダを分ける（衝突しない）
-    const fileName = `${slug}-${numStr}.${ext}`;
-    const repoPath = `photo/${issueFolder}/${slug}/${fileName}`;
-    const publicPath = `/photo/${issueFolder}/${slug}/${fileName}`;
+    const fileName = `${articleFolder}-${numStr}.${ext}`;
+    const repoPath   = `photo/${issueFolder}/${articleFolder}/${fileName}`;
+    const publicPath = `/photo/${issueFolder}/${articleFolder}/${fileName}`;
 
     images.push({ path: repoPath, contentB64: b64 });
     img.setAttribute('src', publicPath);
@@ -1429,13 +1428,6 @@ function processHtmlAndImages(issueRaw, slug, fullHtml) {
   return { html: newHtml, images };
 }
 
-
-    // style は head に分離されるので、body 部分だけ取って再度 ARTICLE_STYLE を付け直す
-    const bodyHtml = doc.body.innerHTML || '';
-    const newHtml  = ARTICLE_STYLE + bodyHtml;
-
-    return { html: newHtml, images };
-  }
 
   // タイトル/サブタイトル用：<br> or \n を改行に
   function renderWithManualBreaks(raw) {
