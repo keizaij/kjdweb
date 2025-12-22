@@ -935,6 +935,36 @@ function initQuill() {
     if (value) quill.format('underlineColor', value);
     else quill.format('underlineColor', false);
   });
+
+  // ★ 画像ボタンを「ファイル選択 → dataURL挿入」に変更（webp対応）
+  toolbar.addHandler('image', () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*,.webp'; // 念のため .webp 明示
+    input.multiple = false;
+
+    input.onchange = async () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+
+      // webp/PNG/JPEG/GIF など
+      if (!file.type.startsWith('image/')) {
+        alert('画像ファイルを選択してください');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const range = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
+        quill.insertEmbed(range.index, 'image', reader.result, 'user');
+        quill.setSelection(range.index + 1, 0, 'silent');
+      };
+      reader.readAsDataURL(file); // data:image/webp;base64,... になる
+    };
+
+    input.click();
+  });
+
   toolbar.addHandler('strikeColor', (value) => {
     if (value) quill.format('strikeColor', value);
     else quill.format('strikeColor', false);
@@ -1001,8 +1031,15 @@ function initQuill() {
       const cd = e.clipboardData;
       if (!cd) return;
 
+      // ★ クリップボードに画像が含まれる場合は、テキスト上書きをせず標準動作に任せる
+      const hasImageItem = Array.from(cd.items || []).some(it => it.type && it.type.startsWith('image/'));
+      if (hasImageItem) {
+        return; // ← e.preventDefault()しないことが大事
+      }
+
       let plain = cd.getData("text/plain") || "";
       if (!plain) return;
+
 
       // Quill 標準貼り付けを止めて、こちらで入れる
       e.preventDefault();
@@ -1208,7 +1245,7 @@ function initQuill() {
       const src = img.getAttribute("src") || "";
       if (!src.startsWith("data:image/")) return;
 
-      const m = src.match(/^data:image\/(png|jpe?g|gif);base64,(.+)$/i);
+      const m = src.match(/^data:image\/(png|jpe?g|gif|webp);base64,(.+)$/i);
       if (!m) return;
 
       const ext = (m[1].toLowerCase() === "jpeg") ? "jpg" : m[1].toLowerCase();
@@ -1368,7 +1405,7 @@ async function saveImagesToGitHub(images, token) {
       const src = img.getAttribute('src') || '';
       if (!src.startsWith('data:image/')) continue;
 
-      const m = src.match(/^data:image\/(png|jpe?g|gif);base64,(.+)$/i);
+      const m = src.match(/^data:image\/(png|jpe?g|gif|webp);base64,(.+)$/i);
       if (!m) continue;
 
       let ext = m[1].toLowerCase();
