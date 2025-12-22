@@ -375,6 +375,16 @@
       <button id="updateButton" onclick="window.updateArticle()" disabled class="flex-1 bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition shadow-lg hover:shadow-xl disabled:bg-gray-400 disabled:cursor-not-allowed">記事を更新</button>
       <button onclick="window.previewArticle()" class="flex-1 bg-gray-500 text-white font-bold py-3 rounded-lg hover:bg-gray-600 transition shadow-lg hover:shadow-xl">プレビュー</button>
       <button onclick="window.clearForm()" class="flex-1 bg-red-500 text-white font-bold py-3 rounded-lg hover:bg-red-600 transition shadow-lg hover:shadow-xl">クリア</button>
+
+<button
+  type="button"
+  onclick="window.publishNow()"
+  class="flex-1 bg-purple-700 text-white font-bold py-3 rounded-lg hover:bg-purple-800 transition shadow-lg hover:shadow-xl"
+>
+  公開反映（一覧＋検索＋デプロイ）
+</button>
+
+
     </div>
   </div>
 
@@ -462,15 +472,16 @@ async function githubGetFile(path, token) {
 
 
 // サーバー上の _manifest.json を GitHub から読み込む
-async function ensureManifestLoaded(force = false, token = undefined) {
-  if (!force && manifestFiles.length > 0) return;
+async function ensureManifestLoaded(force = false, token = undefined, manifestPath = LIVE_MANIFEST_PATH) {
+  if (!force && manifestFiles.length > 0 && manifestPath === (ensureManifestLoaded._loadedPath || LIVE_MANIFEST_PATH)) return;
 
   try {
-    const file = await githubGetFile("_manifest.json", token);
+    const file = await githubGetFile(manifestPath, token);
     if (!file) {
-      console.warn("[MANIFEST] _manifest.json がまだありません（新規）。");
+      console.warn(`[MANIFEST] ${manifestPath} がまだありません（新規）。`);
       manifestFiles = [];
       manifestSha = null;
+      ensureManifestLoaded._loadedPath = manifestPath;
       return;
     }
 
@@ -484,16 +495,19 @@ async function ensureManifestLoaded(force = false, token = undefined) {
     if (Array.isArray(obj.files)) {
       manifestFiles = obj.files.map(f => ({ ...f }));
       manifestSha   = file.sha || null;
-      console.log("[MANIFEST] GitHub からロード:", manifestFiles.length, "件");
+      ensureManifestLoaded._loadedPath = manifestPath;
+      console.log(`[MANIFEST] ${manifestPath} をロード:`, manifestFiles.length, "件");
     } else {
-      console.warn("[MANIFEST] files 配列が無いので空として扱います。");
+      console.warn(`[MANIFEST] ${manifestPath} に files 配列が無いので空として扱います。`);
       manifestFiles = [];
       manifestSha   = file.sha || null;
+      ensureManifestLoaded._loadedPath = manifestPath;
     }
   } catch (e) {
-    console.error("[MANIFEST] 読み込みエラー:", e);
+    console.error(`[MANIFEST] ${manifestPath} 読み込みエラー:`, e);
     manifestFiles = [];
     manifestSha   = null;
+    ensureManifestLoaded._loadedPath = manifestPath;
   }
 }
 
@@ -512,24 +526,22 @@ function buildManifestEntryFromArticle(slug, article) {
 }
 
 // manifestFiles → _manifest.json を GitHub に保存
-async function saveManifestToGitHub(token) {
+async function saveManifestToGitHub(token, manifestPath = LIVE_MANIFEST_PATH) {
   const obj = { files: manifestFiles };
   const text = JSON.stringify(obj, null, 2);
-  const res = await githubUpsertText("_manifest.json", text, token, "Update _manifest.json", manifestSha);
+  const res = await githubUpsertText(manifestPath, text, token, `Update ${manifestPath}`, manifestSha);
   if (res && res.content && res.content.sha) {
     manifestSha = res.content.sha;
   }
 }
 
 // 1記事ぶんを manifestFiles に追加/更新 → _manifest.json を GitHub に保存
-async function updateManifestForArticle(slug, article, token) {
-  // 🔸 毎回 GitHub の最新 _manifest.json を読んでから処理
-  //    forceReload = true にして、他の人の編集ともズレにくくする
-  await ensureManifestLoaded(true, token);
+async function updateManifestForArticle(slug, article, token, manifestPath = DRAFT_MANIFEST_PATH) {
+  // ★常に指定 manifest を最新ロード
+  await ensureManifestLoaded(true, token, manifestPath);
 
   const entry = buildManifestEntryFromArticle(slug, article);
 
-  // slug / articleId / id のどれかが一致すれば同じ記事とみなす
   const key = String(slug);
   const idx = manifestFiles.findIndex(f => {
     const s = String(f.slug || "");
@@ -540,13 +552,13 @@ async function updateManifestForArticle(slug, article, token) {
 
   if (idx >= 0) {
     manifestFiles[idx] = entry;
-    console.log("[MANIFEST] 更新:", slug);
+    console.log(`[MANIFEST] ${manifestPath} 更新:`, slug);
   } else {
     manifestFiles.push(entry);
-    console.log("[MANIFEST] 追加:", slug);
+    console.log(`[MANIFEST] ${manifestPath} 追加:`, slug);
   }
 
-  await saveManifestToGitHub(token);
+  await saveManifestToGitHub(token, manifestPath);
 }
 
 
@@ -583,6 +595,12 @@ function getManifestJsonText() {
   const GITHUB_API_BASE = "https://api.github.com";
   const GITHUB_BASE_PATH = "";                      // ルート直下に保存するなら空
   const GITHUB_TOKEN_STORAGE_KEY = "kjd_github_pat";
+
+
+// ===== Manifest paths =====
+const LIVE_MANIFEST_PATH  = "_manifest.json";
+const DRAFT_MANIFEST_PATH = "draft_manifest.json";
+
 
   // ★全文検索用の元データを置くパス
   const SEARCH_SOURCE_PATH = "build_plain_articles/_search_source.json";
@@ -1846,13 +1864,14 @@ function buildSearchSourceEntry(slug, article) {
 //   ・検索用データに変換して SEARCH_SOURCE_PATH に保存
 //   → UI メッセージは出さず、件数を返す
 // ===============================
-window.rebuildSearchSource = async function() {
-  let token;
-  try {
-    token = getGithubToken();
-  } catch (e) {
-    // トークン未設定は致命的なのでそのまま投げる
-    throw new Error("GitHub トークンが設定されていません（全文検索用データを更新できません）。");
+window.rebuildSearchSource = async function(manifestPath = LIVE_MANIFEST_PATH) {
+  let token = getGithubToken();
+
+  // ★ここが肝：指定manifestを読む
+  await ensureManifestLoaded(true, token, manifestPath);
+
+  if (!Array.isArray(manifestFiles) || manifestFiles.length === 0) {
+    throw new Error(`manifest が空のため検索用データを作成できません（${manifestPath}）。`);
   }
 
   // manifest をロード
@@ -2019,17 +2038,16 @@ window.saveArticle = async function () {
     await exportStaticFilesForArticle(docId, article, token);
 
     // ⑥ manifest 更新（一覧）
-    await updateManifestForArticle(docId, article, token);
+    await updateManifestForArticle(docId, article, token, DRAFT_MANIFEST_PATH);
+
 
     currentArticleId = docId;
     currentArticleCreatedAt = article.createdAt;
 
-    // ⑦ 全文検索用データを再生成
-    const count = await window.rebuildSearchSource();
 
     setMessage(
       `GitHub に記事を書き出しました（${docId}.json / ${docId}.bin ※鍵未設定時は BIN スキップ）。` +
-      `　全文検索用データも更新しました（${count}件）。`
+      `　※検索は「検索ソース再生成（反映）」ボタンでまとめて更新してください。（${count}件）。`
     );
 
     // ★ 90秒後にニュートラルなステータスへ戻す
@@ -2091,9 +2109,9 @@ window.updateArticle = async function () {
     setMessage("記事データ生成中…（GitHub リポジトリ書込中）");
 
     await exportStaticFilesForArticle(currentArticleId, article, token);
-    await updateManifestForArticle(currentArticleId, article, token);
+    await updateManifestForArticle(currentArticleId, article, token, DRAFT_MANIFEST_PATH);
 
-    const count = await window.rebuildSearchSource();
+
 
     setMessage(
       `記事（${currentArticleId}）・一覧・全文検索用データの更新が完了しました（登録記事数 ${count}件）。` +
@@ -2101,7 +2119,7 @@ window.updateArticle = async function () {
     );
 
     // ★ 90秒後にニュートラルなステータスへ戻す
-    scheduleStatusReset(120000);
+    scheduleStatusReset(60000);
 
     ok = true;
   } catch (e) {
@@ -2391,6 +2409,37 @@ window.loadArticleForEdit = async function(slug) {
     updateCategoryDisplay();
     window.closeMultiCategoryModal();
   };
+
+window.publishNow = async function () {
+  if (!canStartGitSave()) return;
+
+  let ok = false;
+  try {
+    const token = getGithubToken();
+
+    setMessage("公開反映中…（一覧＋検索を更新してデプロイを発火します）");
+
+    // 1) draft_manifest.json をロード
+    await ensureManifestLoaded(true, token, DRAFT_MANIFEST_PATH);
+
+    // 2) その内容を _manifest.json に保存（=公開一覧の更新）
+    await saveManifestToGitHub(token, LIVE_MANIFEST_PATH);
+
+
+
+setMessage(
+  `GitHub に記事を書き出しました（${docId}.json / ${docId}.bin ※鍵未設定時は BIN スキップ）。` +
+  `　※公開反映（一覧＋検索＋デプロイ）は「公開反映ボタン」で行ってください。`
+);
+    scheduleStatusReset(10000);
+    ok = true;
+  } catch (e) {
+    console.error("[publishNow] error:", e);
+    setMessage(`公開反映に失敗しました: ${e.message || e}`, true);
+  } finally {
+    finishGitSave(ok);
+  }
+};
 
   </script>
 
