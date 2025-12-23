@@ -1757,9 +1757,9 @@ async function refreshArticleIdList() {
 
   try {
     // レポジトリ直下の _manifest.json を取得
-    const file = await githubGetFile("_manifest.json", token);
+    const file = await githubGetFile("draft_manifest.json", token);
     if (!file) {
-      console.warn("[articleList] _manifest.json がまだありません。");
+      console.warn("[articleList] draft_manifest.json がまだありません。");
       return;
     }
 
@@ -2047,7 +2047,7 @@ window.saveArticle = async function () {
 
     setMessage(
       `GitHub に記事を書き出しました（${docId}.json / ${docId}.bin ※鍵未設定時は BIN スキップ）。` +
-      `　※検索は「検索ソース再生成（反映）」ボタンでまとめて更新してください。（${count}件）。`
+      `　※検索は「検索ソース再生成（反映）」ボタンでまとめて更新してください。
     );
 
     // ★ 90秒後にニュートラルなステータスへ戻す
@@ -2114,7 +2114,7 @@ window.updateArticle = async function () {
 
 
     setMessage(
-      `記事（${currentArticleId}）・一覧・全文検索用データの更新が完了しました（登録記事数 ${count}件）。` +
+      `記事（${currentArticleId}）・一覧・全文検索用データの更新が完了しました。` +
       `　GitHub Actions により公開サイトへデプロイ中です（記事編集は出来ますが、次の保存まで2分お待ちください。）。`
     );
 
