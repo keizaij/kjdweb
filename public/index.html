@@ -124,11 +124,11 @@ window.addEventListener('unhandledrejection', e => {
   --article-spacing:5px;
 
   /* 広告共通 */
-  --ad-drawer-z:1200;
+/*  --ad-drawer-z:1200;
   --ad-gap:8px;
   --ad-pad:8px;
   --ad-h:72px; /* 広告の高さ（PC基準）*/
-}
+} /*
 
 body{
   font-family:Arial,sans-serif;
@@ -338,7 +338,7 @@ main{padding-left:12px;padding-right:12px;padding-top:var(--content-padding-top)
 .item-meta{font-size:12px;color:#666;margin-left:6px;white-space:nowrap;}
 
 /* ========== Ad Drawer (共通) ========== */
-.ad-drawer{position:fixed;left:0;right:0;bottom:0;z-index:var(--ad-drawer-z);display:none;}
+/*.ad-drawer{position:fixed;left:0;right:0;bottom:0;z-index:var(--ad-drawer-z);display:none;}
 .ad-drawer .inner{background:#fff;border-top:1px solid #ddd;box-shadow:0 -6px 18px rgba(0,0,0,.12);padding:var(--ad-pad);}
 .ad-drawer .header{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#666;margin-bottom:6px;}
 .ad-drawer .header .controls{display:none !important;} /* もっと見るを常に非表示 */
@@ -354,7 +354,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%;}
   --header-height:22px;
   --content-padding-top:8px;
   --ad-h:62px; /* モバイルの広告高さを少し低めに */
-}
+}*/
 
 /* Header (mobile) */
 .mobile-mode .header-bar{height:var(--header-height);padding:0 12px;}
@@ -651,7 +651,7 @@ body.devtools-open #articleModal .modal-content .content {
     </main>
 
 <!-- 画面下 固定広告ドロワー -->
-<div id="adDrawer" class="ad-drawer" aria-label="広告">
+/* <div id="adDrawer" class="ad-drawer" aria-label="広告">
   <div class="inner">
     <div class="header">
       <span>広告</span>
@@ -662,7 +662,7 @@ body.devtools-open #articleModal .modal-content .content {
     </div>
     <div class="ad-grid" id="adGrid"></div>
   </div>
-</div>
+</div>*/
 
 
     <button id="page-top">TOP</button>
@@ -978,7 +978,7 @@ function resolvePendingIssueLinks(scope = document) {
 
 
 // ====== 6) モーダル内広告（コンテナ指定版） ======
-async function renderModalAdsInto(gridEl) {
+/* async function renderModalAdsInto(gridEl) {
   try {
     const pool = await fetchAdsFor('article');
     const listState = rr_getState('list');
@@ -995,7 +995,7 @@ async function renderModalAdsInto(gridEl) {
   } catch (e) {
     console.warn('[ads-modal-into] load error', e);
   }
-}
+}*/
 
 
 </script>
@@ -1279,7 +1279,7 @@ async function searchArticleIdsByShards(query, shardKeys) {
 <script>
 /* ===== 広告ロジック（記事一覧 "list" 用） ===== */
 
-const ADS_COLLECTION = 'ads';
+/* const ADS_COLLECTION = 'ads';
 const AD_COLS = 2;
 let adRows = 2;          // 既定は2段
 const adRowsMax = 5;     // 最大5段
@@ -1305,7 +1305,7 @@ async function fetchAdsFor(placement) {
     out.push({ id: doc.id, weight: Number(d.weight)||1, ...d });
   });
   return out;
-}
+} */
 
 // ====== モーダル保護 一式 ======
 const PROTECT_CFG = {
@@ -1459,7 +1459,7 @@ function cleanupArticleProtections() {
 
 
 /* ========= 会社ベースのラウンドロビン（重み付き） ========= */
-
+/*
 const RR_KEY_PREFIX = 'ads:rr:v1:';    // localStorage キー
 const AD_SLOTS = 6;                    // 1画面の枠数
 const COOLDOWN_ROUNDS = 1;             // 直前ラウンドの会社は除外（連続回避）
@@ -1603,7 +1603,7 @@ function nextBatchFor(placement, pool, {
   rr_saveState(placement, state);
 
   return result;
-}
+} 
 
 
 function adjustBodyBottomPadding() {
@@ -1647,7 +1647,7 @@ async function initListAds(){
   }
   // 端末回転/リサイズ時も高さを再計算
   window.addEventListener('resize', adjustBodyBottomPadding);
-}
+} */
 
 </script>
 
