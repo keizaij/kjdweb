@@ -2046,9 +2046,9 @@ window.saveArticle = async function () {
 
 
     setMessage(
-      `GitHub に記事を書き出しました（${docId}.json / ${docId}.bin ※鍵未設定時は BIN スキップ）。` +
-      `　※検索は「検索ソース再生成（反映）」ボタンでまとめて更新してください。
-    );
+  "GitHub に記事を書き出しました。下書きは保存されました。" +
+  " 公開反映は「公開反映（一覧＋検索＋デプロイ）」ボタンで行ってください。"
+);
 
     // ★ 90秒後にニュートラルなステータスへ戻す
     scheduleStatusReset(120000);
