@@ -1757,11 +1757,11 @@ async function refreshArticleIdList() {
 
   try {
     // レポジトリ直下の _manifest.json を取得
-    const file = await githubGetFile("draft_manifest.json", token);
-    if (!file) {
-      console.warn("[articleList] draft_manifest.json がまだありません。");
-      return;
-    }
+    const file = await githubGetFile(DRAFT_MANIFEST_PATH, token);
+if (!file) {
+  console.warn(`[articleList] ${DRAFT_MANIFEST_PATH} がまだありません。`);
+  return;
+}
 
     // Base64 → JSON
     const rawB64 = (file.content || "").replace(/\n/g, "");
