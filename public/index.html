@@ -1715,10 +1715,10 @@ function generateArticleHtml(a){
 
   return `
     <div class="header-section">
-      <div class="logo-text">Members Page</div>
+      <div class="logo-text"></div>
       <div class="meta-info">
-        ${a.publishDate ? `公開日：${a.publishDate}` : ""}
-        ${a.issueNumber ? ` / ${a.issueNumber}` : ""}
+        ${a.publishDate ? `発行：${a.publishDate}` : ""}
+        ${a.issueNumber ? ` / ${a.issueNumber}` : "号"}
       </div>
     </div>
     <div class="title-section">
