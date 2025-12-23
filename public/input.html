@@ -2428,10 +2428,10 @@ window.publishNow = async function () {
 
 
 setMessage(
-  `GitHub に記事を書き出しました（${docId}.json / ${docId}.bin ※鍵未設定時は BIN スキップ）。` +
-  `　※公開反映（一覧＋検索＋デプロイ）は「公開反映ボタン」で行ってください。`
+  "公開反映が完了しました。公開用一覧（_manifest.json）を更新し、デプロイを開始しました。"
 );
-    scheduleStatusReset(10000);
+
+    scheduleStatusReset(100);
     ok = true;
   } catch (e) {
     console.error("[publishNow] error:", e);
