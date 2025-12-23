@@ -1767,6 +1767,18 @@ async function openArticleCanvas(slug, { pushHistory = true } = {}) {
     return;
   }
 
+// モーダルの外側（背景）をクリックした時に閉じる設定
+// 一度だけ設定すれば良いので、関数の外に記述します
+document.getElementById('articleModal')?.addEventListener('click', function(event) {
+  // クリックされた要素が、記事の中身（modalContent）ではなく、
+  // 背景の青白い/黒い枠（overlay）そのものだった場合のみ実行
+  if (event.target === this) {
+    // 既存の閉じる関数を呼び出す
+    // forceClose: true を渡すことで履歴を追わず一気に閉じます
+    closeArticlePopup({ forceClose: true });
+  }
+});
+
   // 直前に別の記事を表示していたら履歴に積む
   const prev = window.currentArticleSlug;
   if (pushHistory && prev && prev !== slug) {
