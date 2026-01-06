@@ -1875,7 +1875,6 @@ window.rebuildSearchSource = async function(manifestPath = LIVE_MANIFEST_PATH) {
   }
 
   // manifest をロード
-  await ensureManifestLoaded(false, token);
   if (!Array.isArray(manifestFiles) || manifestFiles.length === 0) {
     throw new Error("manifest が空のため、検索用データを作成できません。先に記事を書き出してください。");
   }
@@ -2425,7 +2424,7 @@ window.publishNow = async function () {
     // 2) その内容を _manifest.json に保存（=公開一覧の更新）
     await saveManifestToGitHub(token, LIVE_MANIFEST_PATH);
 
-
+    await window.rebuildSearchSource(LIVE_MANIFEST_PATH);
 
 setMessage(
   "公開反映が完了しました。公開用一覧（_manifest.json）を更新し、デプロイを開始しました。"
