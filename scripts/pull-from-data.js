@@ -31,7 +31,6 @@ const SINGLE_FILES = [
 // 同期したい「ディレクトリ」
 const DIR_PREFIXES = [
   "build_plain_articles/",
-  "protected_enc/",
   "photo/",
 ];
 
@@ -56,23 +55,30 @@ async function fetchJson(url) {
 async function fetchContent(pathInRepo) {
   const apiUrl = `https://api.github.com/repos/${DATA_OWNER}/${DATA_REPO}/contents/${encodeURIComponent(pathInRepo)}?ref=${encodeURIComponent(DATA_BRANCH)}`;
   const headers = { "Accept": "application/vnd.github+json" };
-  if (GITHUB_TOKEN) {
-    headers["Authorization"] = `Bearer ${GITHUB_TOKEN}`;
-  }
+  if (GITHUB_TOKEN) headers["Authorization"] = `Bearer ${GITHUB_TOKEN}`;
 
   const res = await fetch(apiUrl, { headers });
-  if (!res.ok) {
-    throw new Error(`fetchContent HTTP ${res.status} for ${pathInRepo}`);
-  }
+  if (!res.ok) throw new Error(`fetchContent HTTP ${res.status} for ${pathInRepo}`);
 
   const json = await res.json();
-  if (!json.content || json.encoding !== "base64") {
-    throw new Error(`Unexpected content format for ${pathInRepo}`);
+
+  // 通常サイズ：base64本文
+  if (json && json.content && json.encoding === "base64") {
+    const b64 = json.content.replace(/\n/g, "");
+    return Buffer.from(b64, "base64");
   }
 
-  const b64 = json.content.replace(/\n/g, "");
-  const buf = Buffer.from(b64, "base64");
-  return buf;
+  // 大きめ or LFS：download_url から生取得
+  if (json && json.download_url) {
+    const res2 = await fetch(json.download_url, {
+      headers: GITHUB_TOKEN ? { Authorization: `Bearer ${GITHUB_TOKEN}` } : undefined
+    });
+    if (!res2.ok) throw new Error(`download_url HTTP ${res2.status} for ${pathInRepo}`);
+    const ab = await res2.arrayBuffer();
+    return Buffer.from(ab);
+  }
+
+  throw new Error(`Unexpected content format for ${pathInRepo}`);
 }
 
 // ==== メイン処理 ====
