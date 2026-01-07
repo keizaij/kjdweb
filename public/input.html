@@ -773,22 +773,14 @@ async function githubUpsertText(path, text, token, message, prevSha) {
   }
 
 
-// 記事オブジェクトから JSON / BIN テキストを生成する
+// 記事オブジェクトから JSON テキストを生成する（BIN廃止）
 async function buildJsonAndBin(slug, article) {
   const jsonObj = {
     ...article,
     _exportedAt: new Date().toISOString(),
   };
   const jsonText = JSON.stringify(jsonObj, null, 2);
-
-  let binText = null;
-  if (!ENC_KEY_B64 || ENC_KEY_B64 === "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=") {
-    console.warn("[BIN] 生成をスキップします: ENC_KEY_B64 に実際の鍵(Base64)を設定してください");
-  } else {
-    binText = await buildBinTextFromJson(slug, jsonText);
-  }
-
-  return { jsonText, binText };
+  return { jsonText };
 }
 
 
@@ -1704,7 +1696,7 @@ async function exportStaticFilesForArticle(slug, article, token) {
   article.htmlContent = processed.html;   // JSON に入れる本文はこちら
 
   // 2) JSON と BIN のテキストを作成
-  const { jsonText, binText } = await buildJsonAndBin(slug, article);
+  const { jsonText } = await buildJsonAndBin(slug, article);
 
   // 3) 記事 JSON を GitHub にアップ
   const jsonB64 = textToBase64(jsonText);
@@ -1715,16 +1707,7 @@ async function exportStaticFilesForArticle(slug, article, token) {
     `Add/update article ${slug}`
   );
 
-  // 4) BIN もあれば GitHub にアップ（鍵未設定なら binText は null）
-  if (binText) {
-    const binB64 = textToBase64(binText);
-    await githubPutFile(
-      token,
-      `protected_enc/${slug}.bin`,
-      binB64,
-      `Add/update bin ${slug}`
-    );
-  }
+
 
   // 5) 画像を GitHub にアップ（/photo/...）
   for (const img of processed.images) {
