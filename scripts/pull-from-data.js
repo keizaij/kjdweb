@@ -26,6 +26,7 @@ const PUBLIC_ROOT = path.join(__dirname, "..", "public");
 const SINGLE_FILES = [
   "_manifest.json",
   "build_plain_articles/_search_source.json",
+  "indexes/categories.json",
 ];
 
 // 同期したい「ディレクトリ」
