@@ -1228,7 +1228,7 @@ function initQuill() {
 
   // ★ Quillから出てきた HTML 内の data:image を /photo/... に差し替えつつ、
   //   画像ファイルを GitHub にアップするための base64 一覧を返す
-  function processInlineImages(issue, slug, html) {
+  function processHtmlAndImages(issue, slug, html) {
     if (!html || typeof html !== "string") {
       return { html: html || "", imageFiles: [] };
     }
@@ -1334,7 +1334,7 @@ function initQuill() {
 // htmlContent 内の <img src="data:image/..."> を
 //   /photo/{basePrefix}/{basePrefix-01.png} 形式に変えつつ
 //   dataURL の配列も返す
-function processImagesInHtml(htmlContent, issueNumOrNull, slug) {
+function processHtmlAndImages(htmlContent, issueNumOrNull, slug) {
   const tmp = document.createElement("div");
   tmp.innerHTML = htmlContent;
 
