@@ -1,0 +1,482 @@
+@charset "UTF-8";
+
+/* ここに <style>〜</style> の中身をそのまま貼る */
+
+/* ========== Base (PC) ========== */
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --header-height:40px;
+  --filter-bar-height:40px;
+  --content-padding-top:10px;
+  --article-spacing:5px;
+
+  /* 広告共通 */
+/*  --ad-drawer-z:1200;
+  --ad-gap:8px;
+  --ad-pad:8px;
+  --ad-h:72px; /* 広告の高さ（PC基準）*/
+} */
+
+body{
+  font-family:Arial,sans-serif;
+  font-size:15px;
+  background:#f4f4f4;
+  color:#333;
+}
+
+
+
+
+.fixed-container{
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+
+  display: flex;
+  flex-direction: column; /* ←必須：縦積み固定 */
+}
+
+/* Header：帯は常に100% */
+.header-bar{
+  height: var(--header-height);
+  background: #002b5c;
+  color: #fff;
+
+  width: 100%;
+  flex: 0 0 auto;
+
+  /* 中身だけ横スクロールさせる */
+  overflow-x: auto;
+  overflow-y: hidden;
+
+  /* iOS系の慣性スクロール */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ヘッダー中身：中身幅ぶんだけ横に伸びる */
+.header-inner{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  /* ここがキモ：中身幅で伸ばす */
+  width: max-content;
+  min-width: 100%;
+
+  padding: 0 20px;
+  white-space: nowrap;
+}
+
+
+
+/* 既存の子要素はそのままでもOKだけど、念のため */
+.header-bar .left-section{display:flex;align-items:center;gap:10px;flex:0 0 auto;}
+.header-bar .logo-container{display:flex;align-items:center;min-width:50px;flex:0 0 auto;}
+.header-bar .logo-container img{height:25px !important;width:auto !important;object-fit:contain;}
+.header-bar .tagline{font-size:16px;white-space:nowrap;flex:0 0 auto;}
+.header-bar .top-links{display:flex;align-items:center;justify-content:flex-end;flex:0 0 auto;}
+.header-bar .top-links a{color:#fff;text-decoration:none;border:.4px solid #fff;padding:.8px 5px;border-radius:5px;font-size:12px;margin-left:5px;}
+
+
+/* 特定商取引法リンクだけ少し控えめ */
+.header-bar .top-links .legal-link{
+  border: none;
+  padding: 0;
+  font-size: 11px;
+  opacity: 0.9;
+}
+
+.header-bar .top-links .legal-link:hover{
+  text-decoration: underline;
+  opacity: 1;
+}
+/* === Header: 縦センターを確実にする（横スクロール構造は維持） === */
+
+/* スクロール箱の.header-bar自体をflex化して縦センター */
+.header-bar{
+  display: flex !important;
+  align-items: center !important;
+}
+
+/* 中身をヘッダー高さに合わせる（上寄り防止） */
+.header-inner{
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+/* 左右ブロックも縦センター */
+.header-bar .left-section,
+.header-bar .logo-container,
+.header-bar .top-links{
+  align-items: center !important;
+}
+
+/* imgのベースライン由来のズレを消す */
+.header-bar .logo-container img{
+  display: block !important;
+}
+
+/* 文字の行高が原因の上寄りを抑える */
+.header-bar .tagline,
+.header-bar .top-links a{
+  line-height: 1 !important;
+}
+
+
+.filter-bar{background:#fff;box-shadow:0 2px 5px rgba(0,0,0,.1);display:flex;align-items:center;padding:0 20px;flex-wrap:wrap;height:auto;}
+.filter-bar-content{display:flex;align-items:flex-start;flex-wrap:wrap;justify-content:flex-start;gap:15px;width:100%;padding:10px 0;}
+#searchInput{width:250px;padding:3px 10px;font-size:14px;}
+.filter-bar button,.filter-bar select{padding:3px 10px;font-size:14px;white-space:nowrap;}
+
+.filter-bar-content{
+  display:flex;
+  align-items:center;      /* ← flex-start → center に変更 */
+  flex-wrap:wrap;
+  justify-content:flex-start;
+  gap:15px;
+  width:100%;
+  padding:10px 0;
+}
+
+
+/* Layout */
+main{padding-left:12px;padding-right:12px;padding-top:var(--content-padding-top);}
+
+
+.header-bar,
+.filter-bar{
+  width: 100%;
+  flex-shrink: 0;
+}
+
+
+/* List */
+
+.article-item a{text-decoration:none;color:#0056b3;cursor:pointer;}
+.article-item a:hover{text-decoration:underline;}
+.article-item{padding:5px 0;}
+
+.search-message{text-align:center;margin-top:20px;font-size:16px;color:#555;}
+
+/* Page top */
+#page-top{position:fixed;bottom:-50px;left:20px;background:rgba(0,43,92,.8);color:#fff;padding:8px 12px;border:none;cursor:pointer;transition:bottom .3s ease;font-size:10px;border-radius:50%;}
+#page-top.show{bottom:20px;}
+
+.auto-issue-link.pending{ color:#9ca3af; pointer-events:none; text-decoration:none; }
+
+
+
+/* flex子要素が「縮めない」事故を防ぐ */
+.header-bar,
+.header-bar .left-section,
+.header-bar .tagline,
+.header-bar .top-links {
+  min-width: 0;
+}
+
+/* Modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:2000;justify-content:center;align-items:center;}
+.modal-content{background:#fff;padding:20px;border-radius:8px;width:90%;max-width:900px;max-height:90%;overflow-y:auto;position:relative;}
+.close-button{position:absolute;top:10px;right:15px;font-size:24px;font-weight:bold;color:#aaa;cursor:pointer;}
+.close-button:hover{color:#555;}
+.article-loading-message{text-align:center;padding:50px;}
+
+
+/* 記事本文共通 */
+#article-modal .article-body { line-height: 1.9; font-size: 16px; }
+#article-modal .article-body img { max-width: 100%; height: auto; display: block; margin: 1.2em auto; }
+#article-modal .article-body h1,
+#article-modal .article-body h2,
+#article-modal .article-body h3 { line-height: 1.4; margin: 1.2em 0 .6em; }
+#article-modal .article-body p { margin: 1em 0; }
+#article-modal .article { color:#111; } /* 全体の文字色をサイト基準に合わせるならここで */
+
+
+#articleModal .modal-container{font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;max-width:800px;margin:auto;background:#fff;padding:30px;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);line-height:1.6;}
+#articleModal .header-section{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:5px;border-bottom:1px solid #eee;}
+#articleModal .meta-info,#articleModal .logo-text{font-size:.9em;color:#7f8c8d;}
+#articleModal .title-section{text-align:center;margin-bottom:30px;}
+#articleModal .main-title{font-size:1.8em;font-weight:700;color:#2c3e50;margin:0 0 10px;}
+#articleModal .subtitle{font-size:1.5em;font-weight:400;color:#2c3e50;margin:0;}
+#articleModal .content{margin-top:20px;line-height:1.8;font-size:1.1em;}
+#articleModal .content p{margin:0;}
+#articleModal .content img{max-width:100%;height:auto;display:block;margin:10px auto;pointer-events:none;}
+#articleModal .button-container{text-align:center;margin-top:30px;}
+#articleModal .back-button{background:#3498db;color:#fff;padding:10px 20px;border:none;border-radius:5px;cursor:pointer;font-size:1em;text-decoration:none;}
+#articleModal .back-button:hover{background:#2980b9;}
+
+/* Modal bottom ads (sticky) */
+#articleModal .ad-sticky{position:sticky;bottom:0;background:#fff;border-top:1px solid #eee;padding:8px;margin-top:20px;z-index:1;}
+#articleModal .ad-sticky .ad-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;}
+#articleModal .ad-sticky .ad{display:block;border-radius:6px;overflow:hidden;background:#fafafa;height:var(--ad-h);}
+#articleModal .ad-sticky .ad img{width:100%;height:100%;object-fit:contain;display:block;}
+
+/* Print: hide modal content */
+@media print{#articleModal .modal-content{display:none !important;}}
+
+/* New list (unchanged) */
+.new-list{background:#fff;border:1px solid #ddd;border-radius:4px;padding:10px;margin-bottom:var(--article-spacing);}
+.new-item{padding:5px 0;}
+.new-item a{text-decoration:none;color:#0056b3;font-weight:700;}
+.new-item a:hover{text-decoration:underline;}
+.new-badge{color:#d00;font-size:11px;border:1px solid #d00;padding:1px 4px;border-radius:3px;margin-right:6px;}
+.new-date{font-size:12px;color:#666;margin-left:6px;white-space:nowrap;}
+.item-meta{font-size:12px;color:#666;margin-left:6px;white-space:nowrap;}
+
+/* ========== Ad Drawer (共通) ========== */
+/*.ad-drawer{position:fixed;left:0;right:0;bottom:0;z-index:var(--ad-drawer-z);display:none;}
+.ad-drawer .inner{background:#fff;border-top:1px solid #ddd;box-shadow:0 -6px 18px rgba(0,0,0,.12);padding:var(--ad-pad);}
+.ad-drawer .header{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#666;margin-bottom:6px;}
+.ad-drawer .header .controls{display:none !important;} /* もっと見るを常に非表示 */
+
+/* グリッドは幅に応じて 1〜6 列へ自動調整（JS側で最大6件を供給） */
+.ad-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:var(--ad-gap);}
+.ad-grid .ad{display:block;border-radius:6px;overflow:hidden;background:#fff;height:var(--ad-h);}
+.ad-grid .ad img{width:100%;height:100%;object-fit:contain;display:block;}
+
+/* ========== Mobile overrides (最後に置く) ========== */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;}
+.mobile-mode{
+  --header-height:22px;
+  --content-padding-top:8px;
+  --ad-h:62px; /* モバイルの広告高さを少し低めに */
+}*/
+
+/* Header (mobile) */
+.mobile-mode .header-bar{height:var(--header-height);padding:0 12px;}
+.mobile-mode .header-bar .logo-container img{height:14px !important;}
+.mobile-mode .header-bar .tagline{font-size:clamp(12px,4.5vw,14px);}
+.mobile-mode .header-bar .top-links a{font-size:8px;padding:0;}
+
+/* Filter bar (mobile: 2段レイアウト) */
+.mobile-mode .filter-bar{padding:8px 10px;}
+.mobile-mode .filter-bar-content{
+  display:grid !important;
+  grid-template-columns:1fr auto auto;
+  grid-template-rows:auto auto;
+  grid-template-areas:
+    "q q btnSearch"
+    "year cat btnReset";
+  gap:8px;align-items:center;
+}
+.mobile-mode #searchInput{grid-area:q;width:100% !important;}
+.mobile-mode .filter-bar button[onclick^="search("]{grid-area:btnSearch;}
+.mobile-mode #yearFilter{grid-area:year;width:100% !important;}
+.mobile-mode #categoryFilter{grid-area:cat;width:100% !important;}
+.mobile-mode .filter-bar button[onclick^="resetSearch("]{grid-area:btnReset;}
+.mobile-mode .filter-bar button,.mobile-mode .filter-bar select{width:auto !important;font-size:11px;padding:6px 10px;}
+.mobile-mode .filter-bar-content > *{min-width:0;}
+
+/* List (mobile) */
+.mobile-mode main{padding-left:12px;padding-right:12px;}
+.mobile-mode details{padding:6px 8px;margin-bottom:4px;}
+.mobile-mode details[open] summary{margin-bottom:6px;}
+.mobile-mode .article-item{padding:4px 0;}
+.mobile-mode details[open] .article-item{padding-left:8px;}
+.mobile-mode .article-item a{font-size:14px;line-height:1;}
+.mobile-mode summary{font-size:15px;}
+
+/* Ad drawer & modal ads (mobile: 3列×2段固定) */
+.mobile-mode .ad-drawer .inner{padding:4px 8px 6px;}
+.mobile-mode .ad-drawer .header{margin-bottom:2px;padding:0;min-height:0;}
+.mobile-mode .ad-drawer .header span{line-height:1;font-size:11px;}
+
+.mobile-mode .ad-drawer .ad-grid,
+.mobile-mode #articleModal .ad-grid,
+.mobile-mode #articleModal .ad-sticky .ad-grid{
+  grid-template-columns:repeat(3,1fr) !important;
+  column-gap:8px;row-gap:4px;
+}
+.mobile-mode .ad-grid .ad{height:var(--ad-h);}
+.mobile-mode .ad-grid .ad img{object-fit:contain;}
+
+/* Modal (mobile) */
+.mobile-mode .close-button{font-size:22px;top:6px;right:10px;}
+.mobile-mode #articleModal .modal-content{width:98vw;padding:5px;}
+.mobile-mode #articleModal .main-title{font-size:clamp(15px,5.2vw,22px);}
+.mobile-mode #articleModal .subtitle{font-size:clamp(12px,4.6vw,20px);}
+.mobile-mode #articleModal .content{font-size:11px;line-height:1.5;}
+.mobile-mode #articleModal .ad-sticky{padding:6px 6px 4px;margin-top:10px;}
+
+/* ===== PC専用（mobile-mode 以外）：1x6 / 2x3 / 3x2 だけに固定 ===== */
+body:not(.mobile-mode) .ad-drawer .ad-grid,
+body:not(.mobile-mode) #articleModal .ad-grid,
+body:not(.mobile-mode) #articleModal .ad-sticky .ad-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr) !important; /* まずは 1段6列 */
+  column-gap: 10px !important;  /* PCは少し広め */
+  row-gap: 8px !important;
+}
+
+/* 6列が苦しくなってきたら → 2段3列 */
+@media (max-width: 1000px) {
+  body:not(.mobile-mode) .ad-drawer .ad-grid,
+  body:not(.mobile-mode) #articleModal .ad-grid,
+  body:not(.mobile-mode) #articleModal .ad-sticky .ad-grid {
+    grid-template-columns: repeat(3, 1fr) !important; /* 2段3列 */
+    column-gap: 10px !important;
+    row-gap: 8px !important;
+  }
+}
+
+/* 3列を“ギリまで”維持するために、さらに幅が狭い帯では余白を圧縮 */
+@media (max-width: 700px) {
+  body:not(.mobile-mode) .ad-drawer .inner { padding-left: 8px; padding-right: 8px; }
+  body:not(.mobile-mode) .ad-drawer .ad-grid,
+  body:not(.mobile-mode) #articleModal .ad-grid,
+  body:not(.mobile-mode) #articleModal .ad-sticky .ad-grid {
+    column-gap: 8px !important;
+    row-gap: 6px !important;
+  }
+}
+
+/* もう本当に入らない幅になったらだけ → 3段2列 */
+@media (max-width: 500px) {
+  body:not(.mobile-mode) .ad-drawer .ad-grid,
+  body:not(.mobile-mode) #articleModal .ad-grid,
+  body:not(.mobile-mode) #articleModal .ad-sticky .ad-grid {
+    grid-template-columns: repeat(2, 1fr) !important; /* 3段2列 */
+    column-gap: 8px !important;
+    row-gap: 6px !important;
+  }
+  body:not(.mobile-mode) .ad-drawer .inner { padding-left: 6px; padding-right: 6px; }
+}
+
+/* 高さ・画像フィットは据え置き（必要なら --ad-h を好みで） */
+body:not(.mobile-mode) .ad-grid .ad {
+  height: var(--ad-h, 72px);
+}
+body:not(.mobile-mode) .ad-grid .ad img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+
+/* === Anti-copy（記事モーダルのみ）=== */
+#articleModal .modal-content,
+#articleModal .modal-content * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  caret-color: transparent; /* キャレット非表示 */
+}
+/* リンクはクリック可のまま */
+#articleModal .modal-content a { pointer-events: auto; }
+
+/* DevTools検知時は本文をブラー */
+body.devtools-open #articleModal .modal-content .content {
+  filter: blur(10px);
+  transition: filter .2s ease;
+}
+
+/* モーダル表示中は“印刷すると白紙” */
+@media print {
+  body.modal-open * { display: none !important; }
+  /* 完全に白紙でOK。メッセージ表示したいならここに擬似要素で出せる */
+}
+
+/* ▼号数ごとのグループ表示用 */
+.issue-group {
+  margin-bottom: 1.5rem;
+}
+
+.issue-group-header {
+  font-weight: bold;
+  margin: 0 0 0.25rem;
+  font-size: 15px;
+}
+
+.issue-group-header .issue-no {
+  margin-right: 0.25em;
+}
+
+.issue-group-header .issue-date {
+  color: #555;
+  font-size: 13px;
+}
+
+.issue-group-list {
+  margin: 0 0 0.75rem 1.5em;
+  padding: 0;
+  list-style: none;
+}
+
+.issue-group-item {
+  margin: 0.15rem 0;
+}
+
+.issue-group-item a {
+  text-decoration: none;
+  color: #0044aa;
+}
+
+.issue-group-item a:hover {
+  text-decoration: underline;
+}
+
+/* ▼検索結果などフラット表示用 */
+.article-row {
+  margin: 0.25rem 0;
+}
+
+.article-row a {
+  text-decoration: none;
+  color: #0044aa;
+}
+
+.article-row a:hover {
+  text-decoration: underline;
+}
+
+.article-row .issue-label {
+  margin-left: 0.5em;
+  font-size: 12px;
+  color: #555;
+}
+
+/* 最新号CTA（Tailwindなしで完結） */
+#latest-issue-cta{
+  margin: 12px 0;
+  padding-left: 45px;   /* ← main と同じ左余白に揃える */
+  padding-right: 20px;
+}
+
+.mobile-mode #latest-issue-cta{
+  padding-left: 12px;   /* ← mobile-mode の main と同じ */
+  padding-right: 12px;
+}
+
+#latest-issue-cta .latest-issue-row{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;      /* スマホで折り返しても崩れない */
+}
+
+#btn-latest-issue{
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 16px;
+  font-weight: 700;
+  cursor: pointer;
+  background: #2563eb;
+  color: #fff;
+}
+#btn-latest-issue:hover{ background:#1d4ed8; }
+
+#latest-issue-cta-sub{
+  font-size: 12px;
+  color: #6b7280;
+  white-space: nowrap;  /* 横に並べたいならこれ */
+}
+
+/* それでもスマホで窮屈なら、注釈だけ折り返し許可 */
+@media (max-width: 420px){
+  #latest-issue-cta-sub{ white-space: normal; }
+}
+
+
+
