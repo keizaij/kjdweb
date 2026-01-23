@@ -980,10 +980,17 @@ function generateArticleHtml(a){
     <div class="button-container">
       <!-- 一覧に戻るボタンは「完全クローズ」専用 -->
       <a class="back-button"
-         href="#"
-         onclick="closeArticlePopup({ forceClose: true }); return false;">
-        一覧に戻る
-      </a>
+   href="#"
+   onclick="closeArticlePopup(); return false;">
+  元の記事に戻る
+</a>
+
+<a class="back-button"
+   href="#"
+   onclick="closeArticlePopup({ forceClose: true }); return false;">
+  一覧に戻る
+</a>
+
     </div>
     <div class="ad-sticky">
       <div id="modalAdGrid" class="ad-grid"></div>
@@ -1007,6 +1014,31 @@ async function fetchArticleJson(slug) {
   return await res.json(); // Workerは復号済みJSONを返す想定
 }
 
+function bindInternalLinkHandlerOnce(boxEl) {
+  if (!boxEl) return;
+  if (boxEl.__boundInternalLink) return;
+  boxEl.__boundInternalLink = true;
+
+  boxEl.addEventListener("click", (e) => {
+    const a = e.target.closest('a[data-slug], a[href^="#internal:"]');
+    if (!a) return;
+
+    const href = a.getAttribute("href") || "";
+    const slug =
+      (a.dataset && a.dataset.slug) ||
+      (href.startsWith("#internal:") ? href.slice("#internal:".length) : "");
+
+    if (!slug) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    // 同じモーダルの中身を差し替え表示（履歴に積む）
+    openArticleCanvas(String(slug).trim(), { pushHistory: true });
+  });
+}
+
+
 // これが“唯一の”オープナー（JSON前提＋履歴管理）
 async function openArticleCanvas(slug, { pushHistory = true } = {}) {
   const overlay = document.getElementById('articleModal');
@@ -1017,17 +1049,21 @@ async function openArticleCanvas(slug, { pushHistory = true } = {}) {
     return;
   }
 
-// モーダルの外側（背景）をクリックした時に閉じる設定
-// 一度だけ設定すれば良いので、関数の外に記述します
-document.getElementById('articleModal')?.addEventListener('click', function(event) {
-  // クリックされた要素が、記事の中身（modalContent）ではなく、
-  // 背景の青白い/黒い枠（overlay）そのものだった場合のみ実行
-  if (event.target === this) {
-    // 既存の閉じる関数を呼び出す
-    // forceClose: true を渡すことで履歴を追わず一気に閉じます
-    closeArticlePopup({ forceClose: true });
-  }
-});
+(function bindArticleModalOverlayCloseOnce(){
+  const overlay = document.getElementById('articleModal');
+  if (!overlay) return;
+
+  // 二重登録防止
+  if (overlay.__boundClose) return;
+  overlay.__boundClose = true;
+
+  overlay.addEventListener('click', (event) => {
+    if (event.target === overlay) {
+      closeArticlePopup({ forceClose: true });
+    }
+  });
+})();
+
 
   // 直前に別の記事を表示していたら履歴に積む
   const prev = window.currentArticleSlug;
@@ -1056,6 +1092,9 @@ document.getElementById('articleModal')?.addEventListener('click', function(even
 
     box.innerHTML = generateArticleHtml(a);
 
+// ★追加：本文内の internal link を拾う（1回だけバインド）
+bindInternalLinkHandlerOnce(box);
+
     // 本文内リンク・号数リンク
     try { linkifyIssueRefs?.(box); } catch(_){}
     try { enhanceArticleLinks?.(box); } catch(_){}
@@ -1080,6 +1119,8 @@ document.getElementById('articleModal')?.addEventListener('click', function(even
       // ③ Workerがダメなときは、build_plain_articles のプレーンJSONにフォールバック
       const a = await fetchPlainArticle(slug);
       box.innerHTML = generateArticleHtml(a);
+// ★追加
+bindInternalLinkHandlerOnce(box);
 
       try { linkifyIssueRefs?.(box); } catch(_){}
       try { enhanceArticleLinks?.(box); } catch(_){}
