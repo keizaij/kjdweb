@@ -172,19 +172,7 @@ window.addEventListener('unhandledrejection', e => {
         </div>
     </main>
 
- <!-- 画面下 固定広告ドロワー -->
- <div id="adDrawer" class="ad-drawer" aria-label="広告">
-  <div class="inner">
-    <div class="header">
-      <span>広告</span>
-      <div class="controls">
-        <button id="adExpandBtn">＋もっと表示</button>
-        <button id="adCollapseBtn" style="display:none;">－閉じる</button>
-      </div>
-    </div>
-    <div class="ad-grid" id="adGrid"></div>
-  </div>
-</div> 
+
 
 
     <button id="page-top">TOP</button>
@@ -246,29 +234,6 @@ function doLogout(event) {
 }
 
 
-
-async function renderModalAds() {
-  try {
-    const pool = await fetchAdsFor('article');
-
-    // リストで直近出している会社は外す（基本的に別の6社に）
-    const listState = rr_getState('list');
-    const exclude = Array.isArray(listState.currentCompanies) ? listState.currentCompanies : [];
-
-    const picked = nextBatchFor('article', pool, { count: AD_SLOTS, excludeCompanies: exclude });
-
-    const grid = document.getElementById('modalAdGrid');
-    if (grid && picked.length) {
-      grid.innerHTML = picked.map(a => `
-        <a class="ad" href="${a.clickUrl || '#'}" target="_blank" rel="noopener">
-          <img src="${a.imageUrl}" alt="${(a.alt||'').replace(/"/g,'&quot;')}" loading="lazy">
-        </a>
-      `).join('');
-    }
-  } catch (e) {
-    console.warn('[ads-modal] load error', e);
-  }
-}
 
 
 
@@ -499,25 +464,7 @@ function resolvePendingIssueLinks(scope = document) {
 
 
 
-// ====== 6) モーダル内広告（コンテナ指定版） ======
-/* async function renderModalAdsInto(gridEl) {
-  try {
-    const pool = await fetchAdsFor('article');
-    const listState = rr_getState('list');
-    const exclude = Array.isArray(listState.currentCompanies) ? listState.currentCompanies : [];
-    const picked = nextBatchFor('article', pool, { count: AD_SLOTS, excludeCompanies: exclude });
 
-    if (picked.length) {
-      gridEl.innerHTML = picked.map(a => `
-        <a class="ad" href="${a.clickUrl || '#'}" target="_blank" rel="noopener">
-          <img src="${a.imageUrl}" alt="${(a.alt||'').replace(/"/g,'&quot;')}" loading="lazy">
-        </a>
-      `).join('');
-    }
-  } catch (e) {
-    console.warn('[ads-modal-into] load error', e);
-  }
-}*/
 
 
 </script>
@@ -799,35 +746,7 @@ async function searchArticleIdsByShards(query, shardKeys) {
 
 
 <script>
-/* ===== 広告ロジック（記事一覧 "list" 用） ===== */
 
-/* const ADS_COLLECTION = 'ads';
-const AD_COLS = 2;
-let adRows = 2;          // 既定は2段
-const adRowsMax = 5;     // 最大5段
-let _adsPool = [];       // 候補プール
-
-function toDate(v){ if (!v) return null; if (typeof v?.toDate==='function') return v.toDate(); if (typeof v==='string') return new Date(v); return v instanceof Date ? v : null; }
-function currentMonth(){ return (new Date()).getMonth()+1; }
-
-async function fetchAdsFor(placement) {
-  const now = new Date();
-  const thisMonth = currentMonth();
-  const snap = await db.collection('ads').where('active','==', true).get();
-  const out = [];
-  snap.forEach(doc => {
-    const d = doc.data();
-    const places = Array.isArray(d.placements) ? d.placements : ['list','article'];
-    if (!places.includes(placement)) return;
-    const s = toDate(d.startAt), e = toDate(d.endAt);
-    const inWindow = (!s || now >= s) && (!e || now <= e);
-    if (!inWindow || !d.imageUrl) return;
-    const months = Array.isArray(d.months) ? d.months : [];
-    if (months.length && !months.includes(thisMonth)) return; // 季節物
-    out.push({ id: doc.id, weight: Number(d.weight)||1, ...d });
-  });
-  return out;
-} */
 
 // ====== モーダル保護 一式 ======
 const PROTECT_CFG = {
@@ -979,197 +898,6 @@ function cleanupArticleProtections() {
 }
 
 
-
-/* ========= 会社ベースのラウンドロビン（重み付き） ========= */
-/*
-const RR_KEY_PREFIX = 'ads:rr:v1:';    // localStorage キー
-const AD_SLOTS = 6;                    // 1画面の枠数
-const COOLDOWN_ROUNDS = 1;             // 直前ラウンドの会社は除外（連続回避）
-
-function rr_getState(placement){
-  try{
-    const s = JSON.parse(localStorage.getItem(RR_KEY_PREFIX+placement) || '{}');
-    s.round ??= 0;
-    s.nextEligible ??= {};   // companyId -> round (このラウンド以降に出せる)
-    s.lastShown ??= {};      // companyId -> round（最後に出したラウンド）
-    s.adIndex ??= {};        // companyId -> 会社内の次の広告インデックス
-    s.currentCompanies ??= [];// 直近表示中の会社ID（重複表示防止用）
-    return s;
-  }catch(_){ return { round:0,nextEligible:{},lastShown:{},adIndex:{},currentCompanies:[] }; }
-}
-function rr_saveState(placement, st){
-  try{ localStorage.setItem(RR_KEY_PREFIX+placement, JSON.stringify(st)); }catch(_){}
-}
-
-// 会社ごとにまとめる
-function groupByCompany(pool){
-  const map = new Map();
-  for (const a of pool){
-    const cid = a.companyId || a.company || 'unknown';
-    if (!map.has(cid)) map.set(cid, []);
-    map.get(cid).push(a);
-  }
-  return map;
-}
-
-// 会社内のローテ（順送り）
-function pickOneFromCompany(cid, adsOfCompany, state){
-  let i = state.adIndex[cid] | 0;
-  if (!(i>=0 && i<adsOfCompany.length)) i = 0;
-  const ad = adsOfCompany[i % adsOfCompany.length];
-  state.adIndex[cid] = (i + 1) % adsOfCompany.length;
-  return ad;
-}
-
-// 固定枠を先に埋める（同じ会社が複数固定は許容）
-function takeFixedSlots(pool, placement, count=AD_SLOTS){
-  const slots = new Array(count).fill(null);
-  const usedCompanies = new Set();
-  const getPos = a => placement==='list' ? Number(a.fixedListPos) : Number(a.fixedArticlePos);
-
-  const fixed = pool.filter(a => {
-    const p = getPos(a);
-    return p>=1 && p<=count;
-  }).sort((a,b)=>getPos(a)-getPos(b));
-
-  for (const ad of fixed){
-    const pos = getPos(ad)-1;
-    if (!slots[pos]) {
-      slots[pos] = ad;
-      usedCompanies.add(ad.companyId || ad.company || 'unknown');
-    }
-  }
-  return { slots, usedCompanies };
-}
-
-// 重み（未設定は1）。「2 = 2周に1回」の解釈。
-function getWeightFromCompany(adsOfCompany){
-  // 同社の広告で weight が混在していたら “最大値” を採用（出にくい方に寄せる）
-  return Math.max(1, ...adsOfCompany.map(a => Number(a.weight)||1));
-}
-
-// 1バッチ（6枠）選ぶ。基本は「前回出た会社は除外」＋「nextEligible を満たす会社」優先。
-// 足りなければ除外をゆるめて必ず6枠埋めに行く（同一会社の複数枠は最終手段で許可）。
-function nextBatchFor(placement, pool, {
-  count = AD_SLOTS,
-  excludeCompanies = [],   // 記事側はリストの現在会社を除外したいのでここに渡す
-}={}){
-  const state = rr_getState(placement);
-  const byCompany = groupByCompany(pool);
-  const now = state.round|0;
-  const excludeSet = new Set([
-    ...excludeCompanies,
-    ...(state.currentCompanies||[]) // 直前バッチの会社は除外（連続回避）
-  ]);
-
-  // 1) 固定枠
-  const { slots, usedCompanies } = takeFixedSlots(pool, placement, count);
-
-  // 2) 回転枠で使える会社（固定で既に使った会社 & 除外は外す）
-  const allCompanies = [...byCompany.keys()].filter(cid => !usedCompanies.has(cid) && !excludeSet.has(cid));
-
-  // 3) “今のラウンドで出せる会社” を優先（lastShownが古い順）
-  const eligible = allCompanies
-    .filter(cid => (state.nextEligible[cid] ?? 0) <= now)
-    .sort((a,b) => (state.lastShown[a] ?? -1) - (state.lastShown[b] ?? -1));
-
-  // 4) 足りなければ nextEligible を無視して補充（同上ソート）
-  const backup = allCompanies
-    .filter(cid => !eligible.includes(cid))
-    .sort((a,b) => {
-      const ne = (state.nextEligible[a]??0) - (state.nextEligible[b]??0);
-      if (ne !== 0) return ne; // 早く出られる方を優先
-      return (state.lastShown[a] ?? -1) - (state.lastShown[b] ?? -1);
-    });
-
-  const pickCompanyOrder = [...eligible, ...backup];
-
-  // 5) スロットを埋める（回転枠）
-  const result = slots.slice(); // 先に固定が入ってる
-  const usedNow = new Set([...usedCompanies]); // このバッチで使った会社（重複禁止）
-  for (let i=0; i<count; i++){
-    if (result[i]) continue; // 既に固定が入ってる
-    const cid = pickCompanyOrder.find(c => !usedNow.has(c));
-    if (!cid) break;
-    const ad = pickOneFromCompany(cid, byCompany.get(cid), state);
-    result[i] = ad;
-    usedNow.add(cid);
-
-    // 表示後に nextEligible / lastShown 更新
-    const w = getWeightFromCompany(byCompany.get(cid));   // 1=毎ラウンド候補, 2=2周に1回
-    state.lastShown[cid] = now;
-    state.nextEligible[cid] = now + (w); // 例）w=2 → 今ラウンドの次+1ラウンドまでは出さない
-  }
-
-  // 6) まだ空きがあれば、やむなく同一会社の2枚目以降も許可（会社数 < 枠数 のとき）
-  if (result.some(v => !v)) {
-    const remainIdx = result.map((v,idx)=>v?null:idx).filter(v=>v!=null);
-    // 固定会社も含め “会社数の少なさ” を埋めるため、順当に順送りで追加
-    const companiesAny = [...byCompany.keys()];
-    let p = 0;
-    for (const idx of remainIdx){
-      const cid = companiesAny[p % companiesAny.length];
-      p++;
-      const ad = pickOneFromCompany(cid, byCompany.get(cid), state);
-      result[idx] = ad;
-      state.lastShown[cid] = now;
-      const w = getWeightFromCompany(byCompany.get(cid));
-      state.nextEligible[cid] = Math.max(state.nextEligible[cid] ?? now, now + (w));
-    }
-  }
-
-  // 7) ラウンド進行 & 直近会社を保存
-  const finalCompanies = result.map(a => a.companyId || a.company || 'unknown');
-  state.currentCompanies = finalCompanies;
-  state.round = now + 1; // 1バッチ＝1ラウンド
-  rr_saveState(placement, state);
-
-  return result;
-} 
-
-
-function adjustBodyBottomPadding() {
-  const drawer = document.getElementById('adDrawer');
-  if (!drawer) return;
-  const h = drawer.offsetHeight || 0;
-  document.body.style.paddingBottom = h ? (h + 10) + 'px' : '';
-}
-
-// リストは常に6枚。固定枠を尊重しつつ、会社は1回/画面。
-function renderAdDrawer() {
-  const grid   = document.getElementById('adGrid');
-  const drawer = document.getElementById('adDrawer');
-  if (!grid || !drawer) return;
-
-  const picked = nextBatchFor('list', _adsPool, { count: AD_SLOTS });
-  if (!picked || !picked.length){
-    drawer.style.display = 'none';
-    document.body.style.paddingBottom = '';
-    return;
-  }
-
-  grid.innerHTML = picked.map(a => `
-    <a class="ad" href="${a.clickUrl || '#'}" target="_blank" rel="noopener">
-      <img src="${a.imageUrl}" alt="${(a.alt||'').replace(/"/g,'&quot;')}" loading="lazy">
-    </a>
-  `).join('');
-
-  drawer.style.display = 'block';
-  requestAnimationFrame(adjustBodyBottomPadding);
-}
-
-
-
-async function initListAds(){
-  try{
-    _adsPool = await fetchAdsFor('list');
-    renderAdDrawer(adRows);
-  } catch(e){
-    console.warn('[ads] load error', e);
-  }
-  // 端末回転/リサイズ時も高さを再計算
-  window.addEventListener('resize', adjustBodyBottomPadding);
-} */
 
 </script>
 
@@ -1333,11 +1061,6 @@ document.getElementById('articleModal')?.addEventListener('click', function(even
     try { enhanceArticleLinks?.(box); } catch(_){}
     try { resolvePendingIssueLinks?.(box); } catch(_){}
 
-    // モーダル内広告
-    try {
-      const g = box.querySelector('#modalAdGrid');
-      g && renderModalAdsInto?.(g);
-    } catch(_){}
 
     // コピー禁止・DevTools検知など
     try { applyArticleProtections?.(); } catch(_){}
