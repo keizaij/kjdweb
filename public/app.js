@@ -163,7 +163,9 @@ function populateCategoryFilter(categoryMap) {
 
   const entries = Object.entries(categoryMap || {});
   // 名前順（日本語）でソート
-  entries.sort((a, b) => a[1].localeCompare(b[1], "ja"));
+  // 例: entries = Object.entries(categoriesMap);
+entries.sort((a, b) => String(a?.[1] ?? "").localeCompare(String(b?.[1] ?? ""), "ja"));
+
 
   for (const [id, name] of entries) {
     const opt = document.createElement("option");
@@ -233,22 +235,30 @@ async function loadCategoriesThenArticles() {
   };
   setMsg('<div class="search-message">記事を読み込み中...</div>');
 
+ try {
+  // 1) カテゴリ辞書を読み込み
+  let categoryMapRaw = {};
   try {
-    // 1) カテゴリ辞書を読み込み
-    let categoryMap = {};
-    try {
-      const catRes = await fetch("/indexes/categories.json", {
-        cache: "no-store",
-      });
-      if (catRes.ok) {
-        categoryMap = await catRes.json();
-      }
-    } catch (e) {
-      console.warn("[INDEX] categories.json 読み込み失敗:", e);
+    const catRes = await fetch("/indexes/categories.json", { cache: "no-store" });
+    if (catRes.ok) {
+      categoryMapRaw = await catRes.json();
     }
-    window.categoryMap = categoryMap;
-    console.log("[INDEX] categoryMap =", categoryMap);
-    populateCategoryFilter(categoryMap);
+  } catch (e) {
+    console.warn("[INDEX] categories.json 読み込み失敗:", e);
+  }
+
+  // ★ここがポイント：正規化してから使う
+  const categoryMap = normalizeCategoriesToMap(categoryMapRaw);
+
+  window.categoryMap = categoryMap;
+  console.log("[INDEX] categoryMap(normalized) =", categoryMap);
+
+  populateCategoryFilter(categoryMap);
+
+  // ...この後に記事読み込みが続く想定
+} catch (e) {
+  console.error("[INDEX] loadCategoriesThenArticles failed:", e);
+}
 
     // 2) 記事一覧の候補URL（今はマニフェスト 1 本だけ）
     const candidateListUrls = ["/_manifest.json"]; 
@@ -399,6 +409,31 @@ articles = articles.filter(a => !a.isHidden);
     );
   }
 }
+
+// 追加：categories.json の形を吸収して「{id: name}」に揃える
+function normalizeCategoriesToMap(raw) {
+  // 新形式: { version, updatedAt, categories:[{id,name,order}] }
+  if (raw && Array.isArray(raw.categories)) {
+    const map = {};
+    for (const c of raw.categories) {
+      if (c && c.id && c.name) map[String(c.id)] = String(c.name);
+    }
+    return map;
+  }
+
+  // 旧形式: { "id":"name", ... }（valueが文字列じゃない事故も吸収）
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const map = {};
+    for (const [id, name] of Object.entries(raw)) {
+      if (!id) continue;
+      map[String(id)] = String(name ?? "");
+    }
+    return map;
+  }
+
+  return {};
+}
+
 
 // =========================
 // 年・カテゴリ・全文検索（静的インデックス）
