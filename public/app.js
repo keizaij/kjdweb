@@ -235,33 +235,28 @@ async function loadCategoriesThenArticles() {
   };
   setMsg('<div class="search-message">記事を読み込み中...</div>');
 
- try {
-  // 1) カテゴリ辞書を読み込み
-  let categoryMapRaw = {};
   try {
-    const catRes = await fetch("/indexes/categories.json", { cache: "no-store" });
-    if (catRes.ok) {
-      categoryMapRaw = await catRes.json();
+    // 1) カテゴリ辞書を読み込み
+    let categoryMapRaw = {};
+    try {
+      const catRes = await fetch("/indexes/categories.json", { cache: "no-store" });
+      if (catRes.ok) {
+        categoryMapRaw = await catRes.json();
+      }
+    } catch (e) {
+      console.warn("[INDEX] categories.json 読み込み失敗:", e);
     }
-  } catch (e) {
-    console.warn("[INDEX] categories.json 読み込み失敗:", e);
-  }
 
-  // ★ここがポイント：正規化してから使う
-  const categoryMap = normalizeCategoriesToMap(categoryMapRaw);
+    // ★正規化してから使う
+    const categoryMap = normalizeCategoriesToMap(categoryMapRaw);
 
-  window.categoryMap = categoryMap;
-  console.log("[INDEX] categoryMap(normalized) =", categoryMap);
+    window.categoryMap = categoryMap;
+    console.log("[INDEX] categoryMap(normalized) =", categoryMap);
 
-  populateCategoryFilter(categoryMap);
-
-  // ...この後に記事読み込みが続く想定
-} catch (e) {
-  console.error("[INDEX] loadCategoriesThenArticles failed:", e);
-}
+    populateCategoryFilter(categoryMap);
 
     // 2) 記事一覧の候補URL（今はマニフェスト 1 本だけ）
-    const candidateListUrls = ["/_manifest.json"]; 
+    const candidateListUrls = ["/_manifest.json"];
 
     // 3) 最初に成功した一覧 JSON を採用
     let rawList = null;
@@ -277,41 +272,13 @@ async function loadCategoriesThenArticles() {
         if (txt.trim().startsWith("<")) continue; // HTML ならスキップ
         const json = JSON.parse(txt);
 
-        // a) 通常の articles 配列
-        if (Array.isArray(json.articles)) {
-          rawList = json.articles;
-          usedUrl = url;
-          break;
-        }
-        // b) items / list / data など名前違い
-        if (Array.isArray(json.items)) {
-          rawList = json.items;
-          usedUrl = url;
-          break;
-        }
-        if (Array.isArray(json.list)) {
-          rawList = json.list;
-          usedUrl = url;
-          break;
-        }
-        if (Array.isArray(json.data)) {
-          rawList = json.data;
-          usedUrl = url;
-          break;
-        }
-        // c) マニフェスト形式（個別ファイルの配列）
-        if (Array.isArray(json.files)) {
-          rawList = json.files;
-          usedUrl = url;
-          fromManifest = true;
-          break;
-        }
-        if (Array.isArray(json.entries)) {
-          rawList = json.entries;
-          usedUrl = url;
-          fromManifest = true;
-          break;
-        }
+        if (Array.isArray(json.articles)) { rawList = json.articles; usedUrl = url; break; }
+        if (Array.isArray(json.items))    { rawList = json.items;    usedUrl = url; break; }
+        if (Array.isArray(json.list))     { rawList = json.list;     usedUrl = url; break; }
+        if (Array.isArray(json.data))     { rawList = json.data;     usedUrl = url; break; }
+
+        if (Array.isArray(json.files))    { rawList = json.files;    usedUrl = url; fromManifest = true; break; }
+        if (Array.isArray(json.entries))  { rawList = json.entries;  usedUrl = url; fromManifest = true; break; }
       } catch (e) {
         console.warn("[INDEX] 一覧候補の取得失敗:", url, e);
       }
@@ -324,70 +291,53 @@ async function loadCategoriesThenArticles() {
     // 4) マニフェスト形式なら title 等を整形
     let articles = [];
     if (fromManifest) {
-  // 期待する要素の形：
-  //   { slug:"215301", title:"...", path:"/build_plain_articles/215301.json",
-  //     publishDate:"YYYY/MM/DD", categoryIds:["..."], isHidden:true/false }
-  articles = rawList.map((x) => {
-    const slug = String(x.slug || x.articleId || x.id || "").trim();
-    const path =
-      x.path || (slug ? `/build_plain_articles/${slug}.json` : "");
-    const catNames = (x.categoryIds || []).map(
-      (id) => (categoryMap?.[id] || id)
-    );
+      articles = rawList.map((x) => {
+        const slug = String(x.slug || x.articleId || x.id || "").trim();
+        const path = x.path || (slug ? `/build_plain_articles/${slug}.json` : "");
+        const catNames = (x.categoryIds || []).map((id) => (categoryMap?.[id] || id));
 
-    // ★ isHidden を素直に引き継ぐ（文字列 "true" でも true 扱い）
-    const isHidden =
-      x.isHidden === true ||
-      x.isHidden === "true" ||
-      x.hidden === true ||
-      x.hidden === "true";
+        const isHidden =
+          x.isHidden === true || x.isHidden === "true" ||
+          x.hidden   === true || x.hidden   === "true";
 
-    return {
-      slug,
-      articleId: x.articleId || slug || "",
-      title: x.title || "",
-      publishDate: x.publishDate || x.date || "",
-      categoryIds: x.categoryIds || [],
-      category: catNames.join(", "),
-      _plainPath: path,
-      isHidden,               // ★ 追加
-    };
-  });
-} else {
-  // ふつうの集約JSONだった場合
-  articles = rawList.map((a) => {
-    const slug = String(a.slug || a.articleId || a.id || "").trim();
-    const catNames = (a.categoryIds || []).map(
-      (id) => (categoryMap?.[id] || id)
-    );
+        return {
+          slug,
+          articleId: x.articleId || slug || "",
+          title: x.title || "",
+          publishDate: x.publishDate || x.date || "",
+          categoryIds: x.categoryIds || [],
+          category: catNames.join(", "),
+          _plainPath: path,
+          isHidden,
+        };
+      });
+    } else {
+      articles = rawList.map((a) => {
+        const slug = String(a.slug || a.articleId || a.id || "").trim();
+        const catNames = (a.categoryIds || []).map((id) => (categoryMap?.[id] || id));
 
-    const isHidden =
-      a.isHidden === true ||
-      a.isHidden === "true" ||
-      a.hidden === true ||
-      a.hidden === "true";
+        const isHidden =
+          a.isHidden === true || a.isHidden === "true" ||
+          a.hidden   === true || a.hidden   === "true";
 
-    return {
-      ...a,
-      slug,
-      articleId: a.articleId || slug || "",
-      category: catNames.join(", "),
-      isHidden,               // ★ 追加
-    };
-  });
-}
-
-
+        return {
+          ...a,
+          slug,
+          articleId: a.articleId || slug || "",
+          category: catNames.join(", "),
+          isHidden,
+        };
+      });
+    }
 
     if (!articles.length) {
-      setMsg(
-        '<div class="search-message">現在、公開されている記事はありません。</div>'
-      );
+      setMsg('<div class="search-message">現在、公開されている記事はありません。</div>');
       return;
     }
 
-// ★ isHidden フィルタ：非表示記事を除外する
-articles = articles.filter(a => !a.isHidden);
+    // ★ isHidden フィルタ：非表示記事を除外する
+    articles = articles.filter((a) => !a.isHidden);
+
     window.allArticles = articles;
 
     // 年フィルタを articles から構築
@@ -401,12 +351,9 @@ articles = articles.filter(a => !a.isHidden);
     renderArticles(articles, { mode: "grouped" });
 
     console.log("[INDEX] ok from:", usedUrl, "count=", articles.length);
-
   } catch (err) {
     console.error("[INDEX] loadCategoriesThenArticles failed:", err);
-    setMsg(
-      '<div class="search-message">記事データの読み込みに失敗しました。</div>'
-    );
+    setMsg('<div class="search-message">記事データの読み込みに失敗しました。</div>');
   }
 }
 
