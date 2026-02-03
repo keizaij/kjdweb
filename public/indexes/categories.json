@@ -1,18 +1,91 @@
 {
-  "08jGjZRtfwpJNYhQsSWZ": "自動車関連",
-  "2a3wuMt8Tqbor2L9sVWT": "小売関連",
-  "3Jnka8JGNSgSi66Py6zV": "競売・入札関連",
-  "6CdvcxXCUWrstur5S0v9": "水産関連",
-  "ClD3hHhAXX7TUqRQXi46": "食品関連",
-  "EBFYEqC4TojaJJ30FGXz": "休業・撤退関連",
-  "GzRRfI71G0BqPjtSAxS2": "新築・改装・移転関連",
-  "S6ASodsOgpYDTatprCtj": "金融機関関連",
-  "SNAkWpUGVGoqZ3YWFdoa": "合併・譲渡関連",
-  "TAiWAvEryLMTfuhmCHVG": "倒産・解散関連",
-  "WYYSfTyL2iTtlNhtChdy": "建築関連",
-  "XjjwdESm9TaSb754kVWF": "新設・進出関連",
-  "eFpNNhhm3RaYBiqnHeC7": "不動産関連",
-  "ntQlhvtZnywquyljKJXK": "運送関連",
-  "qU1Lc6K9RZzDOzgY8RmF": "決算・金融商品関連",
-  "yiRqmTmfAsgFtktyxjNn": "体制変更関連"
+  "version": 1,
+  "updatedAt": "2026-01-26T08:21:32.861Z",
+  "categories": [
+    {
+      "id": "08jGjZRtfwpJNYhQsSWZ",
+      "name": "自動車関連",
+      "order": 0
+    },
+    {
+      "id": "2a3wuMt8Tqbor2L9sVWT",
+      "name": "小売関連",
+      "order": 1
+    },
+    {
+      "id": "3Jnka8JGNSgSi66Py6zV",
+      "name": "競売・入札関連",
+      "order": 2
+    },
+    {
+      "id": "6CdvcxXCUWrstur5S0v9",
+      "name": "水産関連",
+      "order": 3
+    },
+    {
+      "id": "ClD3hHhAXX7TUqRQXi46",
+      "name": "食品関連",
+      "order": 4
+    },
+    {
+      "id": "EBFYEqC4TojaJJ30FGXz",
+      "name": "休業・撤退関連",
+      "order": 5
+    },
+    {
+      "id": "GzRRfI71G0BqPjtSAxS2",
+      "name": "新築・改装・移転関連",
+      "order": 6
+    },
+    {
+      "id": "S6ASodsOgpYDTatprCtj",
+      "name": "金融機関関連",
+      "order": 7
+    },
+    {
+      "id": "SNAkWpUGVGoqZ3YWFdoa",
+      "name": "合併・譲渡関連",
+      "order": 8
+    },
+    {
+      "id": "TAiWAvEryLMTfuhmCHVG",
+      "name": "倒産・解散関連",
+      "order": 9
+    },
+    {
+      "id": "WYYSfTyL2iTtlNhtChdy",
+      "name": "建築関連",
+      "order": 10
+    },
+    {
+      "id": "XjjwdESm9TaSb754kVWF",
+      "name": "新設・進出関連",
+      "order": 11
+    },
+    {
+      "id": "eFpNNhhm3RaYBiqnHeC7",
+      "name": "不動産関連",
+      "order": 12
+    },
+    {
+      "id": "ntQlhvtZnywquyljKJXK",
+      "name": "運送関連",
+      "order": 13
+    },
+    {
+      "id": "qU1Lc6K9RZzDOzgY8RmF",
+      "name": "決算・金融商品関連",
+      "order": 14
+    },
+    {
+      "id": "yiRqmTmfAsgFtktyxjNn",
+      "name": "体制変更関連",
+      "order": 15
+    },
+    {
+      "id": "cat-mkuwf0l8-vsuz",
+      "name": "医療・福祉関連",
+      "order": 16
+    }
+  ]
 }
