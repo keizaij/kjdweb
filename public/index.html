@@ -1230,8 +1230,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  document.addEventListener('click', handleArticleClick);
-})();
+  document.addEventListener("click", (e) => {
+  const a = e.target.closest('a.internal-link[data-slug], a[href^="#internal-"]');
+  if (!a) return;
+
+  e.preventDefault();
+
+  const slug =
+    a.dataset.slug ||
+    (a.getAttribute("href") || "").replace(/^#internal-/, "");
+
+  if (!slug) return;
+
+  openArticleCanvas(slug); // あなたの既存関数
+}, true);
+
+
 </script>
 
 
