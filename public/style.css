@@ -124,6 +124,12 @@ body{
 }
 
 
+/* 「消えない字下げ」 */
+.indent-mark{
+  display:inline-block;
+  width:1em;     /* 字下げ1文字分 */
+  flex:none;
+
 .filter-bar{background:#fff;box-shadow:0 2px 5px rgba(0,0,0,.1);display:flex;align-items:center;padding:0 20px;flex-wrap:wrap;height:auto;}
 .filter-bar-content{display:flex;align-items:flex-start;flex-wrap:wrap;justify-content:flex-start;gap:15px;width:100%;padding:10px 0;}
 #searchInput{width:250px;padding:3px 10px;font-size:14px;}
