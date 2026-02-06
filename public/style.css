@@ -73,7 +73,10 @@ body{
   white-space: nowrap;
 }
 
-
+#articleModal {
+  display: flex !important;
+  background: rgba(0,0,0,.6);
+}
 
 /* 既存の子要素はそのままでもOKだけど、念のため */
 .header-bar .left-section{display:flex;align-items:center;gap:10px;flex:0 0 auto;}
