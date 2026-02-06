@@ -1153,12 +1153,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     return m ? decodeURIComponent(m[1]).trim() : "";
   }
 
-  document.addEventListener(
-    "click",
-    (e) => {
-      const linkEl = e.target.closest(
-        'a.article-link, a.js-article, .article-item a, a[data-slug], [data-slug]'
-      );
+  document.addEventListener("click", (e)=>{ ... }, false);
+
       if (!linkEl) return;
 
       e.preventDefault();
@@ -1191,7 +1187,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 
 <!-- これを </body> のちょっと上に置く（CSSとJSの想定IDに一致） -->
-<div id="articleModal" class="modal-overlay">
+<div id="articleModal" class="modal-overlay" style="display:none;">
   <div class="modal-content">
     <span class="close-button" onclick="closeArticlePopup()">×</span>
     <div id="modalContent" class="content"></div>
