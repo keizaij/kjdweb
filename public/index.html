@@ -10,7 +10,10 @@
 <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
-
+<script>
+  // ★記事JSONを返すWorkerのベースURL（末尾スラッシュ不要）
+  window.WORKER_URL = "https://kjd-article-api.ecj19830411.workers.dev";
+</script>
 
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-GBHXS22T9R"></script>
@@ -1002,13 +1005,16 @@ function generateArticleHtml(a){
 
 // Worker から JSON を取ってくるだけの関数
 async function fetchArticleJson(slug) {
-  const base = window.WORKER_URL;
-  if (!base) throw new Error("WORKER_URL is not set");
-  const url = `${base}/${encodeURIComponent(slug)}`;
+  const url = `${WORKER_URL}/${encodeURIComponent(slug)}`;
   const res = await fetch(url, { cache: "no-store" });
-  if (res.status === 404) throw new Error(`記事が見つかりません (slug=${slug})`);
-  if (!res.ok) throw new Error(`Worker error ${res.status}`);
-  return await res.json();
+
+  if (res.status === 404) {
+    throw new Error(`記事が見つかりません (slug=${slug})`);
+  }
+  if (!res.ok) {
+    throw new Error(`Worker error ${res.status}`);
+  }
+  return await res.json(); // Workerは復号済みJSONを返す想定
 }
 
 function bindInternalLinkHandlerOnce(boxEl) {
@@ -1038,6 +1044,8 @@ function bindInternalLinkHandlerOnce(boxEl) {
 
 // これが“唯一の”オープナー（JSON前提＋履歴管理）
 async function openArticleCanvas(slug, { pushHistory = true } = {}) {
+window.openArticleCanvas = openArticleCanvas;
+window.fetchArticleJson = fetchArticleJson;
   const overlay = document.getElementById('articleModal');
   const box     = document.getElementById('modalContent');
 
@@ -1060,6 +1068,7 @@ async function openArticleCanvas(slug, { pushHistory = true } = {}) {
     }
   });
 })();
+
 
 
   // 直前に別の記事を表示していたら履歴に積む
@@ -1246,11 +1255,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
       }
 
-      if (typeof openArticleCanvas === "function") {
-        openArticleCanvas(slug);
-      } else {
-        console.warn("[OPEN] openArticleCanvas is not defined");
-      }
+      if (typeof window.openArticleCanvas === "function") {
+  window.openArticleCanvas(slug);
+} else {
+  console.warn("[OPEN] window.openArticleCanvas is not defined");
+}
     },
     true
   );
