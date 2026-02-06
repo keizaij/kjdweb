@@ -1002,16 +1002,13 @@ function generateArticleHtml(a){
 
 // Worker から JSON を取ってくるだけの関数
 async function fetchArticleJson(slug) {
-  const url = `${WORKER_URL}/${encodeURIComponent(slug)}`;
+  const base = window.WORKER_URL;
+  if (!base) throw new Error("WORKER_URL is not set");
+  const url = `${base}/${encodeURIComponent(slug)}`;
   const res = await fetch(url, { cache: "no-store" });
-
-  if (res.status === 404) {
-    throw new Error(`記事が見つかりません (slug=${slug})`);
-  }
-  if (!res.ok) {
-    throw new Error(`Worker error ${res.status}`);
-  }
-  return await res.json(); // Workerは復号済みJSONを返す想定
+  if (res.status === 404) throw new Error(`記事が見つかりません (slug=${slug})`);
+  if (!res.ok) throw new Error(`Worker error ${res.status}`);
+  return await res.json();
 }
 
 function bindInternalLinkHandlerOnce(boxEl) {
