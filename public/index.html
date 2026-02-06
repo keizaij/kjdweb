@@ -1032,9 +1032,15 @@ function bindInternalLinkHandlerOnce(boxEl) {
 
 // これが“唯一の”オープナー（JSON前提＋履歴管理）
 async function openArticleCanvas(slug, { pushHistory = true } = {}) {
+  console.log('[DBG] openArticleCanvas ENTER', slug);
   const overlay = document.getElementById('articleModal');
   const box     = document.getElementById('modalContent');
-  if (!overlay || !box) return;
+  console.log('[DBG] overlay=', overlay, 'box=', box);
+
+  if (!overlay || !box)
+  console.error('[openArticleCanvas] modal elements not found');
+
+  return;
 
   // 履歴
   const prev = window.currentArticleSlug;
