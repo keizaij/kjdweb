@@ -99,6 +99,36 @@ body{
   white-space: nowrap;
 }
 
+/* ===== modal (article) ===== */
+#articleModal.modal-overlay{
+  display: none;              /* 初期は隠す */
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  z-index: 2147483647;
+  align-items: center;
+  justify-content: center;
+}
+#articleModal.modal-overlay.is-open{
+  display: flex;              /* 開く時だけ flex */
+}
+#articleModal .modal-content{
+  width: min(920px, 92vw);
+  max-height: 90vh;
+  overflow: auto;
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px 18px;
+  position: relative;
+}
+#articleModal .close-button{
+  position: absolute;
+  right: 12px;
+  top: 8px;
+  cursor: pointer;
+  font-size: 28px;
+  line-height: 1;
+}
 
 
 /* 既存の子要素はそのままでもOKだけど、念のため */
