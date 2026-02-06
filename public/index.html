@@ -1244,6 +1244,69 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   openArticleCanvas(slug); // あなたの既存関数
 }, true);
+})();
+
+
+
+(function () {
+  function getSlugFromElement(el) {
+    if (!el) return "";
+
+    // 1) data-slug 最優先（datasetより attribute の方が堅い）
+    const a1 = el.getAttribute?.("data-slug");
+    if (a1) return String(a1).trim();
+
+    const a2 = el.dataset?.slug;
+    if (a2) return String(a2).trim();
+
+    // 2) 互換
+    const a3 = el.getAttribute?.("data-article-id") || el.dataset?.articleId;
+    if (a3) return String(a3).trim();
+
+    const a4 = el.getAttribute?.("data-id") || el.dataset?.id;
+    if (a4) return String(a4).trim();
+
+    // 3) href fallback
+    const href = el.getAttribute?.("href") || "";
+    const m =
+      href.match(/slug=([^&#]+)/) ||
+      href.match(/^#internal-(.+)$/) ||
+      href.match(/^#open:(.+)$/);
+
+    return m ? decodeURIComponent(m[1]).trim() : "";
+  }
+
+  document.addEventListener(
+    "click",
+    (e) => {
+      const linkEl = e.target.closest(
+        'a.article-link, a.js-article, .article-item a, a[data-slug], [data-slug]'
+      );
+      if (!linkEl) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const slug = getSlugFromElement(linkEl);
+
+      // ★デバッグ（あとで消してOK）
+      console.log("[OPEN] linkEl=", linkEl, "attr data-slug=", linkEl.getAttribute?.("data-slug"), "slug=", slug);
+
+      if (!slug) {
+        console.warn("[OPEN] no slug on click", linkEl);
+        alert("この記事の識別子(slug)が見つかりませんでした。data-slug を確認してください。");
+        return;
+      }
+
+      if (typeof openArticleCanvas === "function") {
+        openArticleCanvas(slug);
+      } else {
+        console.warn("[OPEN] openArticleCanvas is not defined");
+      }
+    },
+    true
+  );
+})();
 
 
 </script>
