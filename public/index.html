@@ -933,6 +933,8 @@ function cleanupArticleProtections() {
 
 
 <script>
+window.articleModalHistory = window.articleModalHistory || [];
+window.currentArticleSlug  = window.currentArticleSlug  || null;
 
 
   // プレーンフォールバック（/build_plain_articles/<slug>.json）
@@ -1033,47 +1035,54 @@ function bindInternalLinkHandlerOnce(boxEl) {
 // これが“唯一の”オープナー（JSON前提＋履歴管理）
 async function openArticleCanvas(slug, { pushHistory = true } = {}) {
   console.log('[DBG] openArticleCanvas ENTER', slug);
+
   const overlay = document.getElementById('articleModal');
   const box     = document.getElementById('modalContent');
   console.log('[DBG] overlay=', overlay, 'box=', box);
 
-  if (!overlay || !box)
-  console.error('[openArticleCanvas] modal elements not found');
-
-  return;
+  // ★ここ、あなたの貼ったコードだと {} が無くて必ず return してたので修正
+  if (!overlay || !box) {
+    console.error('[openArticleCanvas] modal elements not found');
+    return;
+  }
 
   // 履歴
   const prev = window.currentArticleSlug;
   if (pushHistory && prev && prev !== slug) window.articleModalHistory.push(prev);
   window.currentArticleSlug = slug;
 
+  // ★表示（CSSは #articleModal.is-open { display:flex } 前提）
   overlay.classList.add('is-open');
-    console.log('[DBG] after display flex, overlay.style.display=', overlay.style.display);
-
+  document.body.classList.add('modal-open'); // 印刷白紙などのCSSを使ってるなら有効化
   document.body.style.overflow = 'hidden';
+
+  // 初期表示
   box.innerHTML = '<p class="article-loading-message">記事を読み込み中...</p>';
-console.log('[DBG] before fetch');
+
+  console.log('[DBG] before fetchPlainArticle', slug);
+
   try {
     // ★最初から plain を読む
     const a = await fetchPlainArticle(slug);
     box.innerHTML = generateArticleHtml(a);
 
-    bindInternalLinkHandlerOnce(box);
-    try { linkifyIssueRefs?.(box); } catch(_){}
-    try { enhanceArticleLinks?.(box); } catch(_){}
-    try { resolvePendingIssueLinks?.(box); } catch(_){}
-    try { applyArticleProtections?.(); } catch(_){}
-console.warn('[DBG] openArticleCanvas catch', e1);
+    // 後処理
+    try { bindInternalLinkHandlerOnce(box); } catch(e){ console.warn('[DBG] bindInternalLinkHandlerOnce error', e); }
+    try { linkifyIssueRefs?.(box); } catch(e){ console.warn('[DBG] linkifyIssueRefs error', e); }
+    try { enhanceArticleLinks?.(box); } catch(e){ console.warn('[DBG] enhanceArticleLinks error', e); }
+    try { resolvePendingIssueLinks?.(box); } catch(e){ console.warn('[DBG] resolvePendingIssueLinks error', e); }
+    try { applyArticleProtections?.(); } catch(e){ console.warn('[DBG] applyArticleProtections error', e); }
+
   } catch (e) {
     console.error('[openArticleCanvas] plain failed', e);
     box.innerHTML = `<p class="article-loading-message" style="color:red;">記事の読み込みに失敗しました。</p>`;
   }
 }
 
-
 // 古いコード互換
 window.openArticleCanvas = openArticleCanvas;
 window.showArticlePopup  = openArticleCanvas;
+
 
 // 閉じる：
 //  - 履歴があれば「一つ前の記事」に戻る
@@ -1093,8 +1102,13 @@ function closeArticlePopup(options = {}) {
 
   // ここまで来たら完全に閉じる
   const modal = document.getElementById('articleModal');
+  const box   = document.getElementById('modalContent');
+
   if (modal) modal.classList.remove('is-open');
+  if (box) box.innerHTML = ''; // 次回の残骸防止
+
   document.body.style.overflow = '';
+  document.body.classList.remove('modal-open');
 
   // 状態リセット
   window.articleModalHistory = [];
@@ -1104,6 +1118,7 @@ function closeArticlePopup(options = {}) {
   try { cleanupArticleProtections?.(); } catch(_){}
 }
 window.closeArticlePopup = closeArticlePopup;
+
 
 </script>
 
