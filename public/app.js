@@ -772,55 +772,50 @@ async function loadArticles() {
   const NEW_DAYS = 14;
 
   window.allArticles = items.map((raw) => {
-  const articleId =
-    raw.articleId ||
-    raw.slug ||
-    raw.id ||
-    String(raw.issue || raw.issueNumber || '');
+    const articleId =
+      raw.articleId ||
+      raw.slug ||
+      raw.id ||
+      String(raw.issue || raw.issueNumber || '');
 
-  const publishDate =
-    raw.publishDate ||
-    raw.date ||
-    raw.pub_date ||
-    '';
-
-  const now = new Date();
-  const NEW_DAYS = 14;
-  let isNew = false;
-  if (publishDate) {
-    const d = new Date(publishDate.replace(/-/g, '/'));
-    if (!isNaN(d)) {
-      const diff = (now - d) / (1000 * 60 * 60 * 24);
-      isNew = diff >= 0 && diff <= NEW_DAYS;
-    }
-  }
-
-  const catIds =
-    raw.categoryIds ||
-    raw.category_ids ||
-    (Array.isArray(raw.categories) ? raw.categories : []);
-  const catName =
-    raw.category ||
-    raw.categoryName ||
-    '';
-
-  return {
-    articleId,
-    slug: articleId,
-    title: raw.title || '(無題)',
-    publishDate,
-    issueNumber: raw.issue || raw.issueNumber || '',
-    category: catName,
-    categoryIds: catIds,
-    isNewArticle: !!(raw.isNewArticle ?? isNew),
-    isHidden: !!raw.isHidden,
-    sequenceNum: raw.sequenceNum ?? raw.seq ?? null, // ←あれば拾う（任意）
-  };
-});
-
-// ★ 非表示除外は必ず map の後
 window.allArticles = window.allArticles.filter(a => !a.isHidden);
 
+    const publishDate =
+      raw.publishDate ||
+      raw.date ||
+      raw.pub_date ||
+      '';
+
+    let isNew = false;
+    if (publishDate) {
+      const d = new Date(publishDate.replace(/-/g, '/'));
+      if (!isNaN(d)) {
+        const diff = (now - d) / (1000 * 60 * 60 * 24);
+        isNew = diff >= 0 && diff <= NEW_DAYS;
+      }
+    }
+
+    const catIds =
+      raw.categoryIds ||
+      raw.category_ids ||
+      (Array.isArray(raw.categories) ? raw.categories : []);
+    const catName =
+      raw.category ||
+      raw.categoryName ||
+      '';
+
+    return {
+      articleId,
+      slug: articleId,
+      title: raw.title || '(無題)',
+      publishDate,
+      issueNumber: raw.issue || raw.issueNumber || '',
+      category: catName,
+      categoryIds: catIds,
+      isNewArticle: !!(raw.isNewArticle ?? isNew),
+      isHidden: !!raw.isHidden,
+    };
+  });
 
   try {
     populateFilters(window.allArticles);
@@ -829,14 +824,13 @@ window.allArticles = window.allArticles.filter(a => !a.isHidden);
   }
 
   try {
-    populateCategoryFilter(window.categoryMap || {});
+    populateCategoryFilter(window.allArticles, window.categoryMap || {});
   } catch (e) {
     console.warn('[LOAD] populateCategoryFilter error', e);
   }
 
   try {
-    renderArticles(window.allArticles, { mode: 'grouped' });
-
+    renderArticles(window.allArticles, { mode: 'default' });
   } catch (e) {
     console.warn('[LOAD] renderArticles error', e);
   }
