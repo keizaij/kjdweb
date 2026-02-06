@@ -1083,7 +1083,34 @@ async function openArticleCanvas(slug, { pushHistory = true } = {}) {
 window.openArticleCanvas = openArticleCanvas;
 window.showArticlePopup  = openArticleCanvas;
 
+// ===== モーダル外クリック/タッチで閉じる（1回だけ登録） =====
+(function installModalOutsideCloseOnce(){
+  if (window.__outsideCloseInstalled) return;
+  window.__outsideCloseInstalled = true;
 
+  const modal = document.getElementById('articleModal');
+  if (!modal) return;
+
+  // 「オーバーレイ自体」を押した時だけ閉じる（中身クリックは閉じない）
+  const onPointerDown = (e) => {
+    // モーダルが開いてないなら何もしない
+    if (!modal.classList.contains('is-open')) return;
+
+    // クリック/タッチ開始地点が overlay 自体（背景）なら閉じる
+    // ※中の .modal-content から来たイベントは target が別になる
+    if (e.target === modal) {
+      closeArticlePopup({ forceClose: true });
+    }
+  };
+
+  // どの環境でも安定しやすいように pointerdown を優先
+  modal.addEventListener('pointerdown', onPointerDown, { passive: true });
+
+  // 古いiOS等の保険（不要なら消してOK）
+  modal.addEventListener('touchstart', onPointerDown, { passive: true });
+})();
+
+    
 // 閉じる：
 //  - 履歴があれば「一つ前の記事」に戻る
 //  - 履歴が空か forceClose=true のときは完全クローズ
@@ -1196,7 +1223,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (typeof openArticleCanvas === "function") {
         openArticleCanvas(slug);
       } else {
-        console.warn("[OPEN] openArticleCanvas is not defined");
+        console.warn("[] openArticleCanvas is not defined");
       }
     },
     true
