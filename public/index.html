@@ -1047,7 +1047,7 @@ async function openArticleCanvas(slug, { pushHistory = true } = {}) {
   if (pushHistory && prev && prev !== slug) window.articleModalHistory.push(prev);
   window.currentArticleSlug = slug;
 
-  overlay.style.display = 'flex';
+  overlay.classList.add('is-open');
     console.log('[DBG] after display flex, overlay.style.display=', overlay.style.display);
 
   document.body.style.overflow = 'hidden';
@@ -1093,7 +1093,7 @@ function closeArticlePopup(options = {}) {
 
   // ここまで来たら完全に閉じる
   const modal = document.getElementById('articleModal');
-  if (modal) modal.style.display = 'none';
+  if (modal) modal.classList.remove('is-open');
   document.body.style.overflow = '';
 
   // 状態リセット
