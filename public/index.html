@@ -1002,16 +1002,7 @@ function generateArticleHtml(a){
 
 // Worker から JSON を取ってくるだけの関数
 async function fetchArticleJson(slug) {
-  const url = `${WORKER_URL}/${encodeURIComponent(slug)}`;
-  const res = await fetch(url, { cache: "no-store" });
-
-  if (res.status === 404) {
-    throw new Error(`記事が見つかりません (slug=${slug})`);
-  }
-  if (!res.ok) {
-    throw new Error(`Worker error ${res.status}`);
-  }
-  return await res.json(); // Workerは復号済みJSONを返す想定
+  throw new Error("Worker route disabled (use plain JSON)");
 }
 
 function bindInternalLinkHandlerOnce(boxEl) {
@@ -1043,33 +1034,11 @@ function bindInternalLinkHandlerOnce(boxEl) {
 async function openArticleCanvas(slug, { pushHistory = true } = {}) {
   const overlay = document.getElementById('articleModal');
   const box     = document.getElementById('modalContent');
+  if (!overlay || !box) return;
 
-  if (!overlay || !box) {
-    console.error('[openArticleCanvas] modal elements not found');
-    return;
-  }
-
-(function bindArticleModalOverlayCloseOnce(){
-  const overlay = document.getElementById('articleModal');
-  if (!overlay) return;
-
-  // 二重登録防止
-  if (overlay.__boundClose) return;
-  overlay.__boundClose = true;
-
-  overlay.addEventListener('click', (event) => {
-    if (event.target === overlay) {
-      closeArticlePopup({ forceClose: true });
-    }
-  });
-})();
-
-
-  // 直前に別の記事を表示していたら履歴に積む
+  // 履歴
   const prev = window.currentArticleSlug;
-  if (pushHistory && prev && prev !== slug) {
-    window.articleModalHistory.push(prev);
-  }
+  if (pushHistory && prev && prev !== slug) window.articleModalHistory.push(prev);
   window.currentArticleSlug = slug;
 
   overlay.style.display = 'flex';
@@ -1077,73 +1046,22 @@ async function openArticleCanvas(slug, { pushHistory = true } = {}) {
   box.innerHTML = '<p class="article-loading-message">記事を読み込み中...</p>';
 
   try {
-    // ① Worker から復号済みJSONを取得
-    const dec = await fetchArticleJson(slug);
-
-    // ② 表示用に整形
-    const a = {
-      title:       dec.title       || "",
-      subtitle1:   dec.subtitle1   || "",
-      subtitle2:   dec.subtitle2   || "",
-      publishDate: dec.publishDate || "",
-      issueNumber: dec.issue || dec.issueNumber || "",
-      content:     dec.body || dec.htmlContent || ""
-    };
-
+    // ★最初から plain を読む
+    const a = await fetchPlainArticle(slug);
     box.innerHTML = generateArticleHtml(a);
 
-// ★追加：本文内の internal link を拾う（1回だけバインド）
-bindInternalLinkHandlerOnce(box);
-
-    // 本文内リンク・号数リンク
+    bindInternalLinkHandlerOnce(box);
     try { linkifyIssueRefs?.(box); } catch(_){}
     try { enhanceArticleLinks?.(box); } catch(_){}
     try { resolvePendingIssueLinks?.(box); } catch(_){}
-
-
-    // コピー禁止・DevTools検知など
     try { applyArticleProtections?.(); } catch(_){}
 
-    // GA
-    try {
-      window.gtag?.('event','view_item',{
-        item_id: slug,
-        item_name: a.title || slug
-      });
-    } catch(_){}
-
-  } catch (e1) {
-    console.warn('[openArticleCanvas] Worker JSON failed → plain fallback', e1);
-
-    try {
-      // ③ Workerがダメなときは、build_plain_articles のプレーンJSONにフォールバック
-      const a = await fetchPlainArticle(slug);
-      box.innerHTML = generateArticleHtml(a);
-// ★追加
-bindInternalLinkHandlerOnce(box);
-
-      try { linkifyIssueRefs?.(box); } catch(_){}
-      try { enhanceArticleLinks?.(box); } catch(_){}
-      try { resolvePendingIssueLinks?.(box); } catch(_){}
-      try {
-        const g = box.querySelector('#modalAdGrid');
-        g && renderModalAdsInto?.(g);
-      } catch(_){}
-      try { applyArticleProtections?.(); } catch(_){}
-      try {
-        window.gtag?.('event','view_item',{
-          item_id: slug,
-          item_name: a.title || slug
-        });
-      } catch(_){}
-
-    } catch (e2) {
-      console.error('[openArticleCanvas] fallback plain failed', e2);
-      box.innerHTML =
-        `<p class="article-loading-message" style="color:red;">記事の読み込みに失敗しました。</p>`;
-    }
+  } catch (e) {
+    console.error('[openArticleCanvas] plain failed', e);
+    box.innerHTML = `<p class="article-loading-message" style="color:red;">記事の読み込みに失敗しました。</p>`;
   }
 }
+
 
 // 古いコード互換
 window.openArticleCanvas = openArticleCanvas;
