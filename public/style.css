@@ -509,26 +509,28 @@ body.devtools-open #articleModal .modal-content .content {
   /* ここでは display を絶対に書かない */
 }
 
-/* 開閉は #articleModal だけが握る */
-#articleModal{ display:none; }
-#articleModal.is-open{ display:flex; }
+/* ===== modal 強制最終定義 ===== */
+#articleModal {
+  position: fixed !important;
+  inset: 0 !important;
+  display: none !important;
+  background: rgba(0,0,0,.6) !important;
+  z-index: 2147483647 !important;
 
-#articleModal .modal-content{
-  width: min(920px, 92vw);
+  justify-content: center;
+  align-items: center;
+}
+
+#articleModal.is-open {
+  display: flex !important;
+}
+
+#articleModal .modal-content {
+  background: #fff !important;
+  width: min(900px, 92vw);
   max-height: 90vh;
-  overflow: auto;
-  background: #fff;
+  overflow-y: auto;
   border-radius: 12px;
-  padding: 16px 18px;
+  padding: 20px;
   position: relative;
-}
-#articleModal .close-button{
-  position: absolute;
-  right: 12px;
-  top: 8px;
-  cursor: pointer;
-  font-size: 28px;
-  line-height: 1;
-}
-
 }
