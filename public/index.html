@@ -1048,9 +1048,11 @@ async function openArticleCanvas(slug, { pushHistory = true } = {}) {
   window.currentArticleSlug = slug;
 
   overlay.style.display = 'flex';
+    console.log('[DBG] after display flex, overlay.style.display=', overlay.style.display);
+
   document.body.style.overflow = 'hidden';
   box.innerHTML = '<p class="article-loading-message">記事を読み込み中...</p>';
-
+console.log('[DBG] before fetch');
   try {
     // ★最初から plain を読む
     const a = await fetchPlainArticle(slug);
@@ -1061,7 +1063,7 @@ async function openArticleCanvas(slug, { pushHistory = true } = {}) {
     try { enhanceArticleLinks?.(box); } catch(_){}
     try { resolvePendingIssueLinks?.(box); } catch(_){}
     try { applyArticleProtections?.(); } catch(_){}
-
+console.warn('[DBG] openArticleCanvas catch', e1);
   } catch (e) {
     console.error('[openArticleCanvas] plain failed', e);
     box.innerHTML = `<p class="article-loading-message" style="color:red;">記事の読み込みに失敗しました。</p>`;
@@ -1153,7 +1155,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     return m ? decodeURIComponent(m[1]).trim() : "";
   }
 
-  document.addEventListener("click", (e)=>{ ... }, false);
+    document.addEventListener(
+    "click",
+    (e) => {
+      const linkEl = e.target.closest(
+        'a.article-link, a.js-article, .article-item a, a[data-slug], [data-slug]'
+      );
 
       if (!linkEl) return;
 
