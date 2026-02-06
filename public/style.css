@@ -24,6 +24,12 @@ body{
   color:#333;
 }
 
+.modal-overlay {
+  display: none;      /* ← JSで flex にしてる？ */
+  position: fixed;
+  inset: 0;
+  z-index: 9999;      /* ← 低すぎると見えない */
+}
 
 
 
@@ -123,12 +129,6 @@ body{
   line-height: 1 !important;
 }
 
-
-/* 「消えない字下げ」 */
-.indent-mark{
-  display:inline-block;
-  width:1em;     /* 字下げ1文字分 */
-  flex:none;
 
 .filter-bar{background:#fff;box-shadow:0 2px 5px rgba(0,0,0,.1);display:flex;align-items:center;padding:0 20px;flex-wrap:wrap;height:auto;}
 .filter-bar-content{display:flex;align-items:flex-start;flex-wrap:wrap;justify-content:flex-start;gap:15px;width:100%;padding:10px 0;}
