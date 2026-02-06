@@ -24,17 +24,6 @@ body{
   color:#333;
 }
 
-/* 背景オーバーレイ */
-.modal-overlay {
-  display: none;              /* ← JSで flex にする */
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.6);
-  z-index: 9999;
-
-  justify-content: center;
-  align-items: center;
-}
 
 /* 中身ボックス */
 .modal-content {
@@ -99,36 +88,7 @@ body{
   white-space: nowrap;
 }
 
-/* ===== modal (article) ===== */
-#articleModal.modal-overlay{
-  display: none;              /* 初期は隠す */
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.6);
-  z-index: 2147483647;
-  align-items: center;
-  justify-content: center;
-}
-#articleModal.modal-overlay.is-open{
-  display: flex;              /* 開く時だけ flex */
-}
-#articleModal .modal-content{
-  width: min(920px, 92vw);
-  max-height: 90vh;
-  overflow: auto;
-  background: #fff;
-  border-radius: 12px;
-  padding: 16px 18px;
-  position: relative;
-}
-#articleModal .close-button{
-  position: absolute;
-  right: 12px;
-  top: 8px;
-  cursor: pointer;
-  font-size: 28px;
-  line-height: 1;
-}
+
 
 
 /* 既存の子要素はそのままでもOKだけど、念のため */
@@ -238,7 +198,6 @@ main{padding-left:12px;padding-right:12px;padding-top:var(--content-padding-top)
 }
 
 /* Modal */
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:2000;justify-content:center;align-items:center;}
 .modal-content{background:#fff;padding:20px;border-radius:8px;width:90%;max-width:900px;max-height:90%;overflow-y:auto;position:relative;}
 .close-button{position:absolute;top:10px;right:15px;font-size:24px;font-weight:bold;color:#aaa;cursor:pointer;}
 .close-button:hover{color:#555;}
@@ -538,7 +497,38 @@ body.devtools-open #articleModal .modal-content .content {
 /* それでもスマホで窮屈なら、注釈だけ折り返し許可 */
 @media (max-width: 420px){
   #latest-issue-cta-sub{ white-space: normal; }
+
+/* === FIX: article modal display control === */
+.modal-overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  justify-content: center;
+  align-items: center;
+  z-index: 2147483647;
+  /* ここでは display を絶対に書かない */
 }
 
+/* 開閉は #articleModal だけが握る */
+#articleModal{ display:none; }
+#articleModal.is-open{ display:flex; }
 
+#articleModal .modal-content{
+  width: min(920px, 92vw);
+  max-height: 90vh;
+  overflow: auto;
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px 18px;
+  position: relative;
+}
+#articleModal .close-button{
+  position: absolute;
+  right: 12px;
+  top: 8px;
+  cursor: pointer;
+  font-size: 28px;
+  line-height: 1;
+}
 
+}
