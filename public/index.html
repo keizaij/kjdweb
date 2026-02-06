@@ -1194,16 +1194,20 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 
 <!-- これを </body> のちょっと上に置く（CSSとJSの想定IDに一致） -->
-<div id="articleModal" class="modal-overlay" style="display:none;">
+<div id="articleModal" class="modal-overlay">
   <div class="modal-content">
+
     <span class="close-button" onclick="closeArticlePopup()">×</span>
+
     <div id="modalContent" class="content"></div>
 
     <div class="ad-sticky">
       <div id="modalAdGrid" class="ad-grid"></div>
     </div>
+
   </div>
 </div>
+
 
 
 <!-- ★必ずこの後に app.js を読む -->
