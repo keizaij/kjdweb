@@ -1199,53 +1199,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 
 <script>
-(function () {
-  function handleArticleClick(e) {
-    const linkEl = e.target.closest('a.article-link, a.js-article, .article-item a, [data-slug]');
-    if (!linkEl) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    const slug =
-      linkEl.dataset?.slug ||
-      linkEl.getAttribute?.('data-slug') ||
-      linkEl.dataset?.articleId ||
-      linkEl.getAttribute?.('data-article-id') ||
-      linkEl.dataset?.id ||
-      linkEl.getAttribute?.('data-id') ||
-      (linkEl.getAttribute?.('href') || '').match(/slug=([^&#]+)/)?.[1] ||
-      '';
-
-    if (!slug) {
-      console.warn('[OPEN] no slug on click', linkEl);
-      alert('この記事の識別子(slug)が見つかりませんでした。data-slug などを設定してください。');
-      return;
-    }
-
-    if (typeof openArticleCanvas === 'function') {
-      openArticleCanvas(slug);
-    } else {
-      console.warn('[OPEN] openArticleCanvas is not defined');
-    }
-  }
-
-  document.addEventListener("click", (e) => {
-  const a = e.target.closest('a.internal-link[data-slug], a[href^="#internal-"]');
-  if (!a) return;
-
-  e.preventDefault();
-
-  const slug =
-    a.dataset.slug ||
-    (a.getAttribute("href") || "").replace(/^#internal-/, "");
-
-  if (!slug) return;
-
-  openArticleCanvas(slug); // あなたの既存関数
-}, true);
-})();
-
 
 
 (function () {
