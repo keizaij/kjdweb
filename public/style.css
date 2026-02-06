@@ -497,6 +497,7 @@ body.devtools-open #articleModal .modal-content .content {
 /* それでもスマホで窮屈なら、注釈だけ折り返し許可 */
 @media (max-width: 420px){
   #latest-issue-cta-sub{ white-space: normal; }
+}
 
 /* === FIX: article modal display control === */
 .modal-overlay{
