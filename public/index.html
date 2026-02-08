@@ -1251,33 +1251,50 @@ document.addEventListener("DOMContentLoaded", async () => {
 </div>
     
 <script>
-// ===== モーダル外クリック/タッチで閉じる（1回だけ登録） =====
 (function installModalOutsideCloseOnce(){
   if (window.__outsideCloseInstalled) return;
   window.__outsideCloseInstalled = true;
 
-  const modal = document.getElementById('articleModal');
-  if (!modal) return;
-
-  // 「オーバーレイ自体」を押した時だけ閉じる（中身クリックは閉じない）
-  const onPointerDown = (e) => {
-    // モーダルが開いてないなら何もしない
-    if (!modal.classList.contains('is-open')) return;
-
-    // クリック/タッチ開始地点が overlay 自体（背景）なら閉じる
-    // ※中の .modal-content から来たイベントは target が別になる
-    if (e.target === modal) {
-      closeArticlePopup({ forceClose: true });
+  function setup(){
+    const modal = document.getElementById('articleModal');
+    if (!modal) {
+      console.warn('[outsideClose] #articleModal not found');
+      return;
     }
-  };
 
-  // どの環境でも安定しやすいように pointerdown を優先
-  modal.addEventListener('pointerdown', onPointerDown, { passive: true });
+    // 背景（overlay）以外をクリックしたら閉じない、を「中身判定」で行う
+    const onPointerDown = (e) => {
+      if (!modal.classList.contains('is-open')) return;
 
-  // 古いiOS等の保険（不要なら消してOK）
-  modal.addEventListener('touchstart', onPointerDown, { passive: true });
+      const content = modal.querySelector('.modal-content');
+      // content が無い構造でも落ちないように
+      if (content && content.contains(e.target)) return;
+
+      // ここまで来たら「背景側」扱いで閉じる
+      if (typeof window.closeArticlePopup === 'function') {
+        window.closeArticlePopup({ forceClose: true });
+      } else {
+        // 念のため
+        modal.classList.remove('is-open');
+        document.body.style.overflow = '';
+      }
+    };
+
+    modal.addEventListener('pointerdown', onPointerDown, { passive: true });
+    modal.addEventListener('touchstart', onPointerDown, { passive: true });
+
+    console.log('[outsideClose] installed');
+  }
+
+  // DOMができてから確実に取る
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setup);
+  } else {
+    setup();
+  }
 })();
 </script>
+
 
 <!-- ★必ずこの後に app.js を読む -->
 <script src="/app.js?v=2025-11-27-4"></script>
