@@ -1251,7 +1251,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 </div>
     
 <script>
-(function installModalOutsideCloseOnce(){
+(function(){
   if (window.__outsideCloseInstalled) return;
   window.__outsideCloseInstalled = true;
 
@@ -1262,31 +1262,26 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
-    // 背景（overlay）以外をクリックしたら閉じない、を「中身判定」で行う
-    const onPointerDown = (e) => {
+    const handler = (e) => {
       if (!modal.classList.contains('is-open')) return;
 
       const content = modal.querySelector('.modal-content');
-      // content が無い構造でも落ちないように
       if (content && content.contains(e.target)) return;
 
-      // ここまで来たら「背景側」扱いで閉じる
       if (typeof window.closeArticlePopup === 'function') {
         window.closeArticlePopup({ forceClose: true });
       } else {
-        // 念のため
         modal.classList.remove('is-open');
         document.body.style.overflow = '';
       }
     };
 
-    modal.addEventListener('pointerdown', onPointerDown, { passive: true });
-    modal.addEventListener('touchstart', onPointerDown, { passive: true });
+    modal.addEventListener('pointerdown', handler);
+    modal.addEventListener('touchstart', handler);
 
     console.log('[outsideClose] installed');
   }
 
-  // DOMができてから確実に取る
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', setup);
   } else {
@@ -1294,6 +1289,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 })();
 </script>
+
 
 
 <!-- ★必ずこの後に app.js を読む -->
