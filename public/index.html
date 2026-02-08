@@ -1249,6 +1249,22 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   </div>
 </div>
+
+
+
+
+<!-- ★必ずこの後に app.js を読む -->
+<script src="/app.js?v=2025-11-27-4"></script>
+
+<script>
+  (() => {
+    const VIEWER_BASE = "https://kjd-viewer-assets.pages.dev/";
+    const btn = document.getElementById("btn-latest-issue");
+    if (!btn) return;
+    btn.addEventListener("click", () => location.href = VIEWER_BASE);
+  })();
+</script>
+
     
 <script>
 (function(){
@@ -1289,20 +1305,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 })();
 </script>
-
-
-
-<!-- ★必ずこの後に app.js を読む -->
-<script src="/app.js?v=2025-11-27-4"></script>
-
-<script>
-  (() => {
-    const VIEWER_BASE = "https://kjd-viewer-assets.pages.dev/";
-    const btn = document.getElementById("btn-latest-issue");
-    if (!btn) return;
-    btn.addEventListener("click", () => location.href = VIEWER_BASE);
-  })();
-</script>
+    
 </body>
 
 
