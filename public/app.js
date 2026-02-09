@@ -904,3 +904,63 @@ window.resetSearch = function () {
       '<div class="search-message">該当する記事はありません。</div>';
   }
 };
+
+
+// ===============================
+// 外側クリック（モーダル外）で閉じる：キャプチャで強制的に拾う版
+// ===============================
+(function installOutsideClose() {
+  if (window.__outsideCloseInstalled) return;
+  window.__outsideCloseInstalled = true;
+  console.log("[outsideClose] installed");
+
+  document.addEventListener(
+    "click",
+    function (e) {
+      const overlay = document.getElementById("articleModal");
+      if (!overlay) return;
+
+      // 開いてない時は何もしない
+      if (!overlay.classList.contains("is-open")) return;
+
+      const content = overlay.querySelector(".modal-content");
+      if (!content) return;
+
+      // content の中をクリックしたなら閉じない
+      const clickedInside = content.contains(e.target);
+      if (clickedInside) return;
+
+      // overlayの外側（暗い部分）をクリックしたら閉じる
+      if (typeof window.closeArticlePopup === "function") {
+        window.closeArticlePopup({ forceClose: true });
+      } else if (typeof closeArticlePopup === "function") {
+        closeArticlePopup({ forceClose: true });
+      } else {
+        console.warn("[outsideClose] closeArticlePopup not found");
+      }
+    },
+    true // ★ここが重要：キャプチャで先に拾う
+  );
+
+  // モバイル用（clickが遅い端末対策）
+  document.addEventListener(
+    "touchstart",
+    function (e) {
+      const overlay = document.getElementById("articleModal");
+      if (!overlay) return;
+      if (!overlay.classList.contains("is-open")) return;
+
+      const content = overlay.querySelector(".modal-content");
+      if (!content) return;
+
+      if (content.contains(e.target)) return;
+
+      if (typeof window.closeArticlePopup === "function") {
+        window.closeArticlePopup({ forceClose: true });
+      } else if (typeof closeArticlePopup === "function") {
+        closeArticlePopup({ forceClose: true });
+      }
+    },
+    true
+  );
+})();
