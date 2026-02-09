@@ -1267,31 +1267,34 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     
 <script>
-  (function () {
-    if (window.__outsideCloseInstalled) return;
-    window.__outsideCloseInstalled = true;
-    console.log("[outsideClose] installed");
+(function () {
+  if (window.__outsideCloseInstalled) return;
+  window.__outsideCloseInstalled = true;
+  console.log("[outsideClose] installed");
 
-    function handle(e) {
-      const modal = document.getElementById("articleModal");
-      if (!modal) return;
-      if (!modal.classList.contains("is-open")) return;
+  const overlay = document.getElementById("articleModal");
+  if (!overlay) {
+    console.warn("[outsideClose] #articleModal not found");
+    return;
+  }
 
-      const content = modal.querySelector(".modal-content");
-      if (!content) return;
-
-      // ★ モーダルの“外側”をクリック/タップしたら閉じる
-      if (!content.contains(e.target)) {
-        // forceClose:true にすると履歴戻りではなく確実に閉じる
-        closeArticlePopup({ forceClose: true });
-      }
+  overlay.addEventListener("click", function (e) {
+    // overlay自身（背景）を押した時だけ閉じる
+    // 中の .modal-content を押した時は閉じない
+    if (e.target === overlay) {
+      closeArticlePopup({ forceClose: true });
     }
+  }, false);
 
-    // PCクリック + スマホタッチ両対応（capture=true 推奨）
-    document.addEventListener("click", handle, true);
-    document.addEventListener("touchstart", handle, true);
-  })();
+  // モバイルのタッチでも確実に
+  overlay.addEventListener("touchstart", function (e) {
+    if (e.target === overlay) {
+      closeArticlePopup({ forceClose: true });
+    }
+  }, false);
+})();
 </script>
+
 
 
 </body>
