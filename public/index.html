@@ -1236,17 +1236,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 
 <!-- これを </body> のちょっと上に置く（CSSとJSの想定IDに一致） -->
-<div id="articleModal" class="modal-overlay">
+<div id="articleModal" class="modal-overlay"
+     onclick="if(event.target===this) closeArticlePopup({forceClose:true})">
   <div class="modal-content">
-
-    <span class="close-button" onclick="closeArticlePopup()">×</span>
+    <span class="close-button" onclick="closeArticlePopup({forceClose:true})">×</span>
 
     <div id="modalContent" class="content"></div>
 
     <div class="ad-sticky">
       <div id="modalAdGrid" class="ad-grid"></div>
     </div>
-
   </div>
 </div>
 
