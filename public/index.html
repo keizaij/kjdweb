@@ -1266,35 +1266,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 </script>
 
     
-<script>
-(function () {
-  if (window.__outsideCloseInstalled) return;
-  window.__outsideCloseInstalled = true;
-  console.log("[outsideClose] installed");
-
-  const overlay = document.getElementById("articleModal");
-  if (!overlay) {
-    console.warn("[outsideClose] #articleModal not found");
-    return;
-  }
-
-  overlay.addEventListener("click", function (e) {
-    // overlay自身（背景）を押した時だけ閉じる
-    // 中の .modal-content を押した時は閉じない
-    if (e.target === overlay) {
-      closeArticlePopup({ forceClose: true });
-    }
-  }, false);
-
-  // モバイルのタッチでも確実に
-  overlay.addEventListener("touchstart", function (e) {
-    if (e.target === overlay) {
-      closeArticlePopup({ forceClose: true });
-    }
-  }, false);
-})();
-</script>
-
 
 
 </body>
