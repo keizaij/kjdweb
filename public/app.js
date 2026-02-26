@@ -27,70 +27,64 @@ function renderArticles(list, options = {}) {
 
 // 号数ごとにまとめて表示
 function renderGroupedList(container, list) {
-  // 号数↓（新しい号が上）→ 同じ号の中は sequenceNum 昇順
-  const sorted = [...list].sort((a, b) => {
-    const ai = Number(getIssueInfo(a).issue || "0");
-    const bi = Number(getIssueInfo(b).issue || "0");
-    if (ai !== bi) return bi - ai;
+  const latestIssueNum = Number(window.__latestIssueNum || 0);
 
-    const as = a.sequenceNum ?? 999;
-    const bs = b.sequenceNum ?? 999;
+  // 例外を最上段へ → 通常は 号数↓ → 同号内 sequenceNum↑
+  const sorted = [...list].sort((a, b) => {
+    const A = getIssueInfo(a);
+    const B = getIssueInfo(b);
+
+    if (A.isExceptional !== B.isExceptional) return A.isExceptional ? -1 : 1;
+
+    if (!A.isExceptional && !B.isExceptional) {
+      if (A.issueNum !== B.issueNum) return B.issueNum - A.issueNum;
+    }
+
+    const as = Number(a.sequenceNum ?? a.sequence ?? 999999);
+    const bs = Number(b.sequenceNum ?? b.sequence ?? 999999);
     if (as !== bs) return as - bs;
 
     return String(a.slug || "").localeCompare(String(b.slug || ""));
   });
 
-  // 号数 + 日付でグループ化
-  const groups = [];
-  const map = new Map();
-
-  for (const art of sorted) {
-    const { issue, publishDate } = getIssueInfo(art);
-    const key = `${issue}|${publishDate}`;
-    let g = map.get(key);
-    if (!g) {
-      g = { issue, publishDate, items: [] };
-      map.set(key, g);
-      groups.push(g);
-    }
-    g.items.push(art);
-  }
-
   const frag = document.createDocumentFragment();
 
-  for (const g of groups) {
-    const sec = document.createElement("section");
-    sec.className = "issue-group";
+  for (const art of sorted) {
+    const { issue, publishDate, issueNum, isExceptional } = getIssueInfo(art);
 
-    const h = document.createElement("h2");
-    h.className = "issue-group-header";
-    const issueLabel = g.issue ? `No.${g.issue}` : "";
-    const dateLabel = g.publishDate ? `(${g.publishDate})` : "";
-    h.textContent = `${issueLabel}${dateLabel}`;
-    sec.appendChild(h);
+    const isNewBadge = isExceptional || (!isExceptional && issueNum === latestIssueNum);
 
-    const ul = document.createElement("ul");
-    ul.className = "issue-group-list";
+    const row = document.createElement("div");
+    row.className = "article-row";
 
-    for (const art of g.items) {
-      const li = document.createElement("li");
-      li.className = "issue-group-item";
-
-      const a = document.createElement("a");
-      a.href = "#";
-      a.className = "article-link";
-
-      const slug = String(art.slug || art.articleId || "");
-      if (slug) a.dataset.slug = slug;
-
-      a.textContent = art.title || "";
-
-      li.appendChild(a);
-      ul.appendChild(li);
+    // NEW（リンク無し・赤太字）
+    if (isNewBadge) {
+      const badge = document.createElement("span");
+      badge.textContent = "NEW";
+      badge.style.color = "#c00";
+      badge.style.fontWeight = "700";
+      badge.style.marginRight = "8px";
+      row.appendChild(badge);
     }
 
-    sec.appendChild(ul);
-    frag.appendChild(sec);
+    // タイトル（モーダルリンク）
+    const a = document.createElement("a");
+    a.href = "#";
+    a.className = "article-link";
+    const slug = String(art.slug || art.articleId || "");
+    if (slug) a.dataset.slug = slug;
+    a.textContent = art.title || "";
+    row.appendChild(a);
+
+    // メタ【No.XXXX(yyyy/mm/dd)】（全文検索と同じ体裁に寄せる）
+    const meta = document.createElement("span");
+    meta.className = "issue-label";
+    const issueLabel = issue ? `No.${issue}` : "";
+    const dateLabel = publishDate ? `(${publishDate})` : "";
+    meta.textContent = `【${issueLabel}${dateLabel}】`;
+    row.appendChild(meta);
+
+    frag.appendChild(row);
   }
 
   container.innerHTML = "";
@@ -99,13 +93,24 @@ function renderGroupedList(container, list) {
 
 // 検索・カテゴリ別用のフラット表示
 function renderFlatList(container, list) {
+  const latestIssueNum = Number(window.__latestIssueNum || 0);
   const frag = document.createDocumentFragment();
 
   for (const art of list) {
-    const { issue, publishDate } = getIssueInfo(art);
+    const { issue, publishDate, issueNum, isExceptional } = getIssueInfo(art);
+    const isNewBadge = isExceptional || (!isExceptional && issueNum === latestIssueNum);
 
     const row = document.createElement("div");
     row.className = "article-row";
+
+    if (isNewBadge) {
+      const badge = document.createElement("span");
+      badge.textContent = "NEW";
+      badge.style.color = "#c00";
+      badge.style.fontWeight = "700";
+      badge.style.marginRight = "8px";
+      row.appendChild(badge);
+    }
 
     const a = document.createElement("a");
     a.href = "#";
@@ -129,15 +134,39 @@ function renderFlatList(container, list) {
   container.appendChild(frag);
 }
 
-// 記事から号数と日付を取り出してラベル用に整形
+// 記事から号数と日付を取り出してラベル用に整形（例外G系対応）
 function getIssueInfo(article) {
-  // 号数は基本 issue フィールド、なければ slug 先頭4桁
-  let issue = (article.issue || "").toString().replace(/\D/g, "");
-  if (!issue && article.slug) issue = String(article.slug).slice(0, 4);
+  const raw = String(article.issue ?? "").trim();
+
+  // ★例外：G0001 など
+  const isExceptional = /^G\d{4,}$/i.test(raw);
+
+  // 表示用（No.XXXX）
+  let issueLabel = "";
+  let issueNum = 0;
+
+  if (raw) {
+    if (isExceptional) {
+      issueLabel = raw.toUpperCase(); // "G0001"
+      issueNum = 0;                   // 通常号の比較対象から外す想定
+    } else {
+      const digits = raw.replace(/\D/g, "");
+      issueLabel = digits ? digits.padStart(4, "0") : raw;
+      issueNum = Number(digits || 0);
+    }
+  } else if (article.slug) {
+    // issue が無ければ slug 先頭4桁
+    const s = String(article.slug);
+    const head = s.slice(0, 4).replace(/\D/g, "");
+    if (head) {
+      issueLabel = head.padStart(4, "0");
+      issueNum = Number(head || 0);
+    }
+  }
 
   const publishDate = article.publishDate || ""; // "2025/08/08" 想定
 
-  return { issue, publishDate };
+  return { issue: issueLabel, issueNum, publishDate, isExceptional };
 }
 
 // =========================
@@ -300,15 +329,25 @@ async function loadCategoriesThenArticles() {
           x.isHidden === true || x.isHidden === "true" ||
           x.hidden   === true || x.hidden   === "true";
 
+    // ★追加：例外表示フラグ（manifest側のキー揺れを吸収）
+    const isExceptional =
+      x["例外表示"] === true || x["例外表示"] === "true" ||
+      x.exceptional === true || x.exceptional === "true" ||
+      x.isExceptional === true || x.isExceptional === "true";
+
         return {
           slug,
           articleId: x.articleId || slug || "",
           title: x.title || "",
           publishDate: x.publishDate || x.date || "",
-          categoryIds: x.categoryIds || [],
-          category: catNames.join(", "),
-          _plainPath: path,
-          isHidden,
+      issue: x.issue || "",                // ★追加（あれば使う）
+      sequence: x.sequence || "",          // ★追加（あれば使う）
+      sequenceNum: x.sequenceNum ?? null,  // ★追加（あれば使う）
+      categoryIds: x.categoryIds || [],
+      category: catNames.join(", "),
+      _plainPath: path,
+      isHidden,
+      isExceptional, // ★追加
         };
       });
     } else {
@@ -337,6 +376,19 @@ async function loadCategoriesThenArticles() {
 
     // ★ isHidden フィルタ：非表示記事を除外する
     articles = articles.filter((a) => !a.isHidden);
+
+// ★最新号（通常号）の判定：最大の号数（数字）を latest とする
+const latestIssueNum = (() => {
+  let max = 0;
+  for (const a of articles) {
+    const { issueNum, isExceptional } = getIssueInfo(a);
+    if (isExceptional) continue;          // 例外は除外（常に別枠）
+    if (issueNum > max) max = issueNum;
+  }
+  return max;
+})();
+window.__latestIssueNum = latestIssueNum;
+
 
     window.allArticles = articles;
 
