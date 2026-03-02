@@ -180,7 +180,7 @@ main{padding-left:12px;padding-right:12px;padding-top:var(--content-padding-top)
   justify-content: center;
   min-width: 30px;          /* ←速報とNEWの横幅を揃える（好みで調整） */
   height: 22px;
-  padding: 0 8px;
+  padding: 0 4px;
   margin-right: 8px;
   border-radius: 4px;
   font-weight: 800;
