@@ -191,15 +191,15 @@ main{padding-left:12px;padding-right:12px;padding-top:var(--content-padding-top)
 }
 
 .badge-breaking {
-  border: 2px solid #c00;
-  color: #c00;
-  background: transparent;
+  border: 0.5px solid #c00;
+  color: #fff;
+  background: #c00;
 }
 
 .badge-new {
   background: transparent;
-  color: #ffdd00;                   /* 黄色面 */
-  -webkit-text-stroke: 0.6px #c00;  /* ←細い赤縁（ここが太いと潰れる） */
+  color: #c00;                   /* 黄色面 */
+  -webkit-text-stroke: 2px #ffdd00;  /* ←細い黄色縁（ここが太いと潰れる） */
   paint-order: stroke fill;         /* stroke→fillの順で描画（対応ブラウザ多め） */
 }
 
