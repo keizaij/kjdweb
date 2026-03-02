@@ -178,7 +178,7 @@ main{padding-left:12px;padding-right:12px;padding-top:var(--content-padding-top)
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 56px;          /* ←速報とNEWの横幅を揃える（好みで調整） */
+  min-width: 30px;          /* ←速報とNEWの横幅を揃える（好みで調整） */
   height: 22px;
   padding: 0 8px;
   margin-right: 8px;
@@ -191,7 +191,6 @@ main{padding-left:12px;padding-right:12px;padding-top:var(--content-padding-top)
 }
 
 .badge-breaking {
-  border: 2px solid #c00;
   color: #c00;
   background: transparent;
 }
