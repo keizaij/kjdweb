@@ -173,6 +173,37 @@ main{padding-left:12px;padding-right:12px;padding-top:var(--content-padding-top)
 }
 
 
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;          /* ←速報とNEWの横幅を揃える（好みで調整） */
+  height: 22px;
+  padding: 0 8px;
+  margin-right: 8px;
+  border-radius: 4px;
+  font-weight: 800;
+  font-size: 12px;
+  line-height: 1;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+}
+
+.badge-breaking {
+  border: 2px solid #c00;
+  color: #c00;
+  background: transparent;
+}
+
+.badge-new {
+  border: 2px solid #c00;
+  background: transparent;
+  color: #ffdd00;                   /* 黄色面 */
+  -webkit-text-stroke: 0.6px #c00;  /* ←細い赤縁（ここが太いと潰れる） */
+  paint-order: stroke fill;         /* stroke→fillの順で描画（対応ブラウザ多め） */
+}
+
 /* List */
 
 .article-item a{text-decoration:none;color:#0056b3;cursor:pointer;}
