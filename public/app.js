@@ -86,7 +86,7 @@ function renderGroupedList(container, list) {
     // 速報を最上段へ
     if (A.isBreaking !== B.isBreaking) return A.isBreaking ? -1 : 1;
 
-    // 通常は号数降順
+    // 通常は号数降順（速報は issueNum=0 なのでここは実質通常のみ）
     if (A.issueNum !== B.issueNum) return B.issueNum - A.issueNum;
 
     // 同号内 sequence 昇順
@@ -102,38 +102,18 @@ function renderGroupedList(container, list) {
   for (const art of sorted) {
     const { issue, publishDate, issueNum, isBreaking } = getIssueInfo(art);
 
+    // 通常記事で、最新号なら NEW
     const isNewBadge = !isBreaking && issueNum === latestIssueNum;
 
     const row = document.createElement("div");
     row.className = "article-row";
 
-    // 速報バッジ
+    // バッジはここだけ（統一）
     if (isBreaking) {
-      const badge = document.createElement("span");
-      badge.textContent = "速報!";
-      badge.style.display = "inline-block";
-      badge.style.border = "2px solid #c00";
-      badge.style.color = "#c00";
-      badge.style.fontWeight = "800";
-      badge.style.marginRight = "8px";
-      badge.style.padding = "2px 6px";
-      badge.style.fontSize = "12px";
-      badge.style.lineHeight = "1";
-      badge.style.verticalAlign = "middle";
-      row.appendChild(badge);
+      row.appendChild(makeBadge("速報!", "breaking"));
+    } else if (isNewBadge) {
+      row.appendChild(makeBadge("NEW", "new"));
     }
-
-    const slugStr = String(art.slug || art.articleId || "");
-const isBreaking = slugStr.startsWith("S0000");
-
-// 通常記事で、最新号なら NEW
-const isNewBadge = !isBreaking && issueNum === latestIssueNum;
-
-if (isBreaking) {
-  row.appendChild(makeBadge("速報!", "breaking"));
-} else if (isNewBadge) {
-  row.appendChild(makeBadge("NEW", "new"));
-}
 
     // タイトルリンク
     const a = document.createElement("a");
@@ -146,30 +126,26 @@ if (isBreaking) {
 
     // メタ表示
     const meta = document.createElement("span");
-meta.className = "issue-label";
+    meta.className = "issue-label";
 
-const isBreaking = String(art.slug || art.articleId || "").startsWith("S0000");
+    // 速報：号数なしで【yyyy/mm/dd 新着】
+    // 通常：従来の【No.XXXX(yyyy/mm/dd)】
+    if (isBreaking) {
+      const d = publishDate ? String(publishDate) : "";
+      meta.textContent = `【${d} 新着】`;
+    } else {
+      const issueLabel = issue ? `No.${issue}` : "";
+      const dateLabel = publishDate ? `(${publishDate})` : "";
+      meta.textContent = `【${issueLabel}${dateLabel}】`;
+    }
 
-// 速報：号数なし、日付指定で【yyyy/mm/dd 新着】
-// 通常：従来の【No.XXXX(yyyy/mm/dd)】
-if (isBreaking) {
-  const d = publishDate ? String(publishDate) : "";
-  meta.textContent = `【${d} 新着】`;
-} else {
-  const issueLabel = issue ? `No.${issue}` : "";
-  const dateLabel = publishDate ? `(${publishDate})` : "";
-  meta.textContent = `【${issueLabel}${dateLabel}】`;
-}
-
-row.appendChild(meta);
-
+    row.appendChild(meta);
     frag.appendChild(row);
   }
 
   container.innerHTML = "";
   container.appendChild(frag);
 }
-
 
 // ===============================
 // フラット表示（検索・カテゴリ別）
@@ -186,33 +162,14 @@ function renderFlatList(container, list) {
     const row = document.createElement("div");
     row.className = "article-row";
 
+    // バッジはここだけ（統一）
     if (isBreaking) {
-      const badge = document.createElement("span");
-      badge.textContent = "速報!";
-      badge.style.display = "inline-block";
-      badge.style.border = "2px solid #c00";
-      badge.style.color = "#c00";
-      badge.style.fontWeight = "800";
-      badge.style.marginRight = "8px";
-      badge.style.padding = "2px 6px";
-      badge.style.fontSize = "12px";
-      badge.style.lineHeight = "1";
-      badge.style.verticalAlign = "middle";
-      row.appendChild(badge);
+      row.appendChild(makeBadge("速報!", "breaking"));
+    } else if (isNewBadge) {
+      row.appendChild(makeBadge("NEW", "new"));
     }
 
-    const slugStr = String(art.slug || art.articleId || "");
-const isBreaking = slugStr.startsWith("S0000");
-
-// 通常記事で、最新号なら NEW
-const isNewBadge = !isBreaking && issueNum === latestIssueNum;
-
-if (isBreaking) {
-  row.appendChild(makeBadge("速報!", "breaking"));
-} else if (isNewBadge) {
-  row.appendChild(makeBadge("NEW", "new"));
-}
-
+    // タイトル
     const a = document.createElement("a");
     a.href = "#";
     a.className = "article-link";
@@ -220,11 +177,18 @@ if (isBreaking) {
     if (slug) a.dataset.slug = slug;
     a.textContent = art.title || "";
 
+    // メタ
     const meta = document.createElement("span");
     meta.className = "issue-label";
-    const issueLabel = issue ? `No.${issue}` : "";
-    const dateLabel = publishDate ? `(${publishDate})` : "";
-    meta.textContent = `【${issueLabel}${dateLabel}】`;
+
+    if (isBreaking) {
+      const d = publishDate ? String(publishDate) : "";
+      meta.textContent = `【${d} 新着】`;
+    } else {
+      const issueLabel = issue ? `No.${issue}` : "";
+      const dateLabel = publishDate ? `(${publishDate})` : "";
+      meta.textContent = `【${issueLabel}${dateLabel}】`;
+    }
 
     row.appendChild(a);
     row.appendChild(meta);
