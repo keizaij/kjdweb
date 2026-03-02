@@ -34,11 +34,12 @@ function renderGroupedList(container, list) {
     const A = getIssueInfo(a);
     const B = getIssueInfo(b);
 
-    if (A.isExceptional !== B.isExceptional) return A.isExceptional ? -1 : 1;
+    const isBreakingA = String(a.slug || "").startsWith("S0000");
+const isBreakingB = String(b.slug || "").startsWith("S0000");
 
-    if (!A.isExceptional && !B.isExceptional) {
-      if (A.issueNum !== B.issueNum) return B.issueNum - A.issueNum;
-    }
+if (isBreakingA !== isBreakingB) return isBreakingA ? -1 : 1;
+
+
 
     const as = Number(a.sequenceNum ?? a.sequence ?? 999999);
     const bs = Number(b.sequenceNum ?? b.sequence ?? 999999);
@@ -50,22 +51,50 @@ function renderGroupedList(container, list) {
   const frag = document.createDocumentFragment();
 
   for (const art of sorted) {
-    const { issue, publishDate, issueNum, isExceptional } = getIssueInfo(art);
+    const { issue, publishDate, issueNum, isBreaking } = getIssueInfo(art);
 
-    const isNewBadge = isExceptional || (!isExceptional && issueNum === latestIssueNum);
+const slugStr = String(art.slug || art.articleId || "");
+const isBreaking = slugStr.startsWith("S0000");
+
+// 通常記事で、最新号なら NEW
+const isNewBadge = !isBreaking && issueNum === latestIssueNum;
 
     const row = document.createElement("div");
     row.className = "article-row";
 
-    // NEW（リンク無し・赤太字）
-    if (isNewBadge) {
-      const badge = document.createElement("span");
-      badge.textContent = "NEW";
-      badge.style.color = "#c00";
-      badge.style.fontWeight = "700";
-      badge.style.marginRight = "8px";
-      row.appendChild(badge);
-    }
+    // 速報バッジ（赤枠＋赤文字）
+if (isBreaking) {
+  const badge = document.createElement("span");
+  badge.textContent = "速報!";
+  badge.style.display = "inline-block";
+  badge.style.border = "2px solid #c00";
+  badge.style.color = "#c00";
+  badge.style.fontWeight = "800";
+  badge.style.marginRight = "8px";
+  badge.style.padding = "2px 6px";
+  badge.style.fontSize = "12px";
+  badge.style.lineHeight = "1";
+  badge.style.verticalAlign = "middle";
+  row.appendChild(badge);
+}
+
+// NEWバッジ（黄色文字＋赤縁）
+if (isNewBadge) {
+  const badge = document.createElement("span");
+  badge.textContent = "NEW";
+  badge.style.display = "inline-block";
+  badge.style.fontWeight = "800";
+  badge.style.marginRight = "8px";
+  badge.style.lineHeight = "1";
+  badge.style.verticalAlign = "middle";
+
+  badge.style.color = "#ffd400";
+  badge.style.webkitTextStroke = "1.5px #c00";
+  badge.style.textShadow =
+    "-1px -1px 0 #c00, 1px -1px 0 #c00, -1px 1px 0 #c00, 1px 1px 0 #c00";
+
+  row.appendChild(badge);
+}
 
     // タイトル（モーダルリンク）
     const a = document.createElement("a");
@@ -97,8 +126,10 @@ function renderFlatList(container, list) {
   const frag = document.createDocumentFragment();
 
   for (const art of list) {
-    const { issue, publishDate, issueNum, isExceptional } = getIssueInfo(art);
-    const isNewBadge = isExceptional || (!isExceptional && issueNum === latestIssueNum);
+    const { issue, publishDate, issueNum, isBreaking } = getIssueInfo(art);
+
+// 通常記事で、最新号なら NEW
+const isNewBadge = !isBreaking && issueNum === latestIssueNum;
 
     const row = document.createElement("div");
     row.className = "article-row";
@@ -134,30 +165,31 @@ function renderFlatList(container, list) {
   container.appendChild(frag);
 }
 
-// 記事から号数と日付を取り出してラベル用に整形（例外G系対応）
+// 記事から号数と日付を取り出してラベル用に整形（速報S系対応）
 function getIssueInfo(article) {
-  const raw = String(article.issue ?? "").trim();
+  const rawIssue = String(article.issue ?? "").trim();
+  const slugStr  = String(article.slug || article.articleId || "").trim();
 
-  // ★例外：G0001 など
-  const isExceptional = /^G\d{4,}$/i.test(raw);
+  // 速報（S0000xx）は slug で判定（最も確実）
+  const isBreaking = slugStr.startsWith("S0000");
 
-  // 表示用（No.XXXX）
+  // 表示用（No.XXXX）とソート用の issueNum
   let issueLabel = "";
   let issueNum = 0;
 
-  if (raw) {
-    if (isExceptional) {
-      issueLabel = raw.toUpperCase(); // "G0001"
-      issueNum = 0;                   // 通常号の比較対象から外す想定
+  if (rawIssue) {
+    // 速報は issue が "S0000" として入ってくる想定
+    if (/^S\d{4}$/i.test(rawIssue)) {
+      issueLabel = rawIssue.toUpperCase(); // "S0000"
+      issueNum = 0; // latestIssue 判定から除外する（後述の最新号算出でも除外）
     } else {
-      const digits = raw.replace(/\D/g, "");
-      issueLabel = digits ? digits.padStart(4, "0") : raw;
+      const digits = rawIssue.replace(/\D/g, "");
+      issueLabel = digits ? digits.padStart(4, "0") : rawIssue;
       issueNum = Number(digits || 0);
     }
-  } else if (article.slug) {
-    // issue が無ければ slug 先頭4桁
-    const s = String(article.slug);
-    const head = s.slice(0, 4).replace(/\D/g, "");
+  } else if (slugStr) {
+    // issue が無ければ slug 先頭4文字が "0001" などの場合だけ拾う
+    const head = slugStr.slice(0, 4).replace(/\D/g, "");
     if (head) {
       issueLabel = head.padStart(4, "0");
       issueNum = Number(head || 0);
@@ -165,8 +197,7 @@ function getIssueInfo(article) {
   }
 
   const publishDate = article.publishDate || ""; // "2025/08/08" 想定
-
-  return { issue: issueLabel, issueNum, publishDate, isExceptional };
+  return { issue: issueLabel, issueNum, publishDate, isBreaking };
 }
 
 // =========================
@@ -329,12 +360,6 @@ async function loadCategoriesThenArticles() {
           x.isHidden === true || x.isHidden === "true" ||
           x.hidden   === true || x.hidden   === "true";
 
-    // ★追加：例外表示フラグ（manifest側のキー揺れを吸収）
-    const isExceptional =
-      x["例外表示"] === true || x["例外表示"] === "true" ||
-      x.exceptional === true || x.exceptional === "true" ||
-      x.isExceptional === true || x.isExceptional === "true";
-
         return {
           slug,
           articleId: x.articleId || slug || "",
@@ -347,7 +372,6 @@ async function loadCategoriesThenArticles() {
       category: catNames.join(", "),
       _plainPath: path,
       isHidden,
-      isExceptional, // ★追加
         };
       });
     } else {
@@ -381,9 +405,9 @@ async function loadCategoriesThenArticles() {
 const latestIssueNum = (() => {
   let max = 0;
   for (const a of articles) {
-    const { issueNum, isExceptional } = getIssueInfo(a);
-    if (isExceptional) continue;          // 例外は除外（常に別枠）
-    if (issueNum > max) max = issueNum;
+    const { issueNum, isBreaking } = getIssueInfo(a);
+if (isBreaking) continue;      // 速報は latest 判定から除外
+if (issueNum > max) max = issueNum;
   }
   return max;
 })();
