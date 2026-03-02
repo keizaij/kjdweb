@@ -184,19 +184,19 @@ main{padding-left:12px;padding-right:12px;padding-top:var(--content-padding-top)
   margin-right: 8px;
   border-radius: 4px;
   font-weight: 800;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1;
   box-sizing: border-box;
   flex: 0 0 auto;
 }
 
 .badge-breaking {
+  border: 2px solid #c00;
   color: #c00;
   background: transparent;
 }
 
 .badge-new {
-  border: 2px solid #c00;
   background: transparent;
   color: #ffdd00;                   /* 黄色面 */
   -webkit-text-stroke: 0.6px #c00;  /* ←細い赤縁（ここが太いと潰れる） */
