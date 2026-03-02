@@ -61,6 +61,18 @@ function getIssueInfo(article) {
 }
 
 
+function makeBadge(text, kind) {
+  const el = document.createElement("span");
+  el.className = "badge";
+
+  // kind で見た目を分ける（CSS側で .badge-breaking / .badge-new を定義する）
+  if (kind === "breaking") el.classList.add("badge-breaking");
+  if (kind === "new")      el.classList.add("badge-new");
+
+  el.textContent = text;
+  return el;
+}
+
 // ===============================
 // グループ表示（トップページなど）
 // ===============================
@@ -111,21 +123,17 @@ function renderGroupedList(container, list) {
       row.appendChild(badge);
     }
 
-    // NEWバッジ（通常記事の最新号のみ）
-    if (isNewBadge) {
-      const badge = document.createElement("span");
-      badge.textContent = "NEW";
-      badge.style.display = "inline-block";
-      badge.style.fontWeight = "800";
-      badge.style.marginRight = "8px";
-      badge.style.lineHeight = "1";
-      badge.style.verticalAlign = "middle";
-      badge.style.color = "#ffd400";
-      badge.style.webkitTextStroke = "1.5px #c00";
-      badge.style.textShadow =
-        "-1px -1px 0 #c00, 1px -1px 0 #c00, -1px 1px 0 #c00, 1px 1px 0 #c00";
-      row.appendChild(badge);
-    }
+    const slugStr = String(art.slug || art.articleId || "");
+const isBreaking = slugStr.startsWith("S0000");
+
+// 通常記事で、最新号なら NEW
+const isNewBadge = !isBreaking && issueNum === latestIssueNum;
+
+if (isBreaking) {
+  row.appendChild(makeBadge("速報!", "breaking"));
+} else if (isNewBadge) {
+  row.appendChild(makeBadge("NEW", "new"));
+}
 
     // タイトルリンク
     const a = document.createElement("a");
@@ -138,11 +146,22 @@ function renderGroupedList(container, list) {
 
     // メタ表示
     const meta = document.createElement("span");
-    meta.className = "issue-label";
-    const issueLabel = issue ? `No.${issue}` : "";
-    const dateLabel = publishDate ? `(${publishDate})` : "";
-    meta.textContent = `【${issueLabel}${dateLabel}】`;
-    row.appendChild(meta);
+meta.className = "issue-label";
+
+const isBreaking = String(art.slug || art.articleId || "").startsWith("S0000");
+
+// 速報：号数なし、日付指定で【yyyy/mm/dd 新着】
+// 通常：従来の【No.XXXX(yyyy/mm/dd)】
+if (isBreaking) {
+  const d = publishDate ? String(publishDate) : "";
+  meta.textContent = `【${d} 新着】`;
+} else {
+  const issueLabel = issue ? `No.${issue}` : "";
+  const dateLabel = publishDate ? `(${publishDate})` : "";
+  meta.textContent = `【${issueLabel}${dateLabel}】`;
+}
+
+row.appendChild(meta);
 
     frag.appendChild(row);
   }
@@ -182,20 +201,17 @@ function renderFlatList(container, list) {
       row.appendChild(badge);
     }
 
-    if (isNewBadge) {
-      const badge = document.createElement("span");
-      badge.textContent = "NEW";
-      badge.style.display = "inline-block";
-      badge.style.fontWeight = "800";
-      badge.style.marginRight = "8px";
-      badge.style.lineHeight = "1";
-      badge.style.verticalAlign = "middle";
-      badge.style.color = "#ffd400";
-      badge.style.webkitTextStroke = "1.5px #c00";
-      badge.style.textShadow =
-        "-1px -1px 0 #c00, 1px -1px 0 #c00, -1px 1px 0 #c00, 1px 1px 0 #c00";
-      row.appendChild(badge);
-    }
+    const slugStr = String(art.slug || art.articleId || "");
+const isBreaking = slugStr.startsWith("S0000");
+
+// 通常記事で、最新号なら NEW
+const isNewBadge = !isBreaking && issueNum === latestIssueNum;
+
+if (isBreaking) {
+  row.appendChild(makeBadge("速報!", "breaking"));
+} else if (isNewBadge) {
+  row.appendChild(makeBadge("NEW", "new"));
+}
 
     const a = document.createElement("a");
     a.href = "#";
