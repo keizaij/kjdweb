@@ -25,22 +25,59 @@ function renderArticles(list, options = {}) {
   }
 }
 
-// 号数ごとにまとめて表示
+// ===============================
+// 記事から号数と日付を取り出して整形（速報対応版）
+// ===============================
+function getIssueInfo(article) {
+  const rawIssue = String(article.issue ?? "").trim();
+  const slugStr  = String(article.slug || article.articleId || "").trim();
+
+  // 速報（S0000xx）
+  const isBreaking = slugStr.startsWith("S0000");
+
+  let issueLabel = "";
+  let issueNum = 0;
+
+  if (rawIssue) {
+    if (/^S\d{4}$/i.test(rawIssue)) {
+      issueLabel = rawIssue.toUpperCase(); // S0000
+      issueNum = 0; // 最新号判定から除外
+    } else {
+      const digits = rawIssue.replace(/\D/g, "");
+      issueLabel = digits ? digits.padStart(4, "0") : rawIssue;
+      issueNum = Number(digits || 0);
+    }
+  } else if (slugStr) {
+    const head = slugStr.slice(0, 4).replace(/\D/g, "");
+    if (head) {
+      issueLabel = head.padStart(4, "0");
+      issueNum = Number(head || 0);
+    }
+  }
+
+  const publishDate = article.publishDate || "";
+
+  return { issue: issueLabel, issueNum, publishDate, isBreaking };
+}
+
+
+// ===============================
+// グループ表示（トップページなど）
+// ===============================
 function renderGroupedList(container, list) {
   const latestIssueNum = Number(window.__latestIssueNum || 0);
 
-  // 例外を最上段へ → 通常は 号数↓ → 同号内 sequenceNum↑
   const sorted = [...list].sort((a, b) => {
     const A = getIssueInfo(a);
     const B = getIssueInfo(b);
 
-    const isBreakingA = String(a.slug || "").startsWith("S0000");
-const isBreakingB = String(b.slug || "").startsWith("S0000");
+    // 速報を最上段へ
+    if (A.isBreaking !== B.isBreaking) return A.isBreaking ? -1 : 1;
 
-if (isBreakingA !== isBreakingB) return isBreakingA ? -1 : 1;
+    // 通常は号数降順
+    if (A.issueNum !== B.issueNum) return B.issueNum - A.issueNum;
 
-
-
+    // 同号内 sequence 昇順
     const as = Number(a.sequenceNum ?? a.sequence ?? 999999);
     const bs = Number(b.sequenceNum ?? b.sequence ?? 999999);
     if (as !== bs) return as - bs;
@@ -53,50 +90,44 @@ if (isBreakingA !== isBreakingB) return isBreakingA ? -1 : 1;
   for (const art of sorted) {
     const { issue, publishDate, issueNum, isBreaking } = getIssueInfo(art);
 
-const slugStr = String(art.slug || art.articleId || "");
-const isBreaking = slugStr.startsWith("S0000");
-
-// 通常記事で、最新号なら NEW
-const isNewBadge = !isBreaking && issueNum === latestIssueNum;
+    const isNewBadge = !isBreaking && issueNum === latestIssueNum;
 
     const row = document.createElement("div");
     row.className = "article-row";
 
-    // 速報バッジ（赤枠＋赤文字）
-if (isBreaking) {
-  const badge = document.createElement("span");
-  badge.textContent = "速報!";
-  badge.style.display = "inline-block";
-  badge.style.border = "2px solid #c00";
-  badge.style.color = "#c00";
-  badge.style.fontWeight = "800";
-  badge.style.marginRight = "8px";
-  badge.style.padding = "2px 6px";
-  badge.style.fontSize = "12px";
-  badge.style.lineHeight = "1";
-  badge.style.verticalAlign = "middle";
-  row.appendChild(badge);
-}
+    // 速報バッジ
+    if (isBreaking) {
+      const badge = document.createElement("span");
+      badge.textContent = "速報!";
+      badge.style.display = "inline-block";
+      badge.style.border = "2px solid #c00";
+      badge.style.color = "#c00";
+      badge.style.fontWeight = "800";
+      badge.style.marginRight = "8px";
+      badge.style.padding = "2px 6px";
+      badge.style.fontSize = "12px";
+      badge.style.lineHeight = "1";
+      badge.style.verticalAlign = "middle";
+      row.appendChild(badge);
+    }
 
-// NEWバッジ（黄色文字＋赤縁）
-if (isNewBadge) {
-  const badge = document.createElement("span");
-  badge.textContent = "NEW";
-  badge.style.display = "inline-block";
-  badge.style.fontWeight = "800";
-  badge.style.marginRight = "8px";
-  badge.style.lineHeight = "1";
-  badge.style.verticalAlign = "middle";
+    // NEWバッジ（通常記事の最新号のみ）
+    if (isNewBadge) {
+      const badge = document.createElement("span");
+      badge.textContent = "NEW";
+      badge.style.display = "inline-block";
+      badge.style.fontWeight = "800";
+      badge.style.marginRight = "8px";
+      badge.style.lineHeight = "1";
+      badge.style.verticalAlign = "middle";
+      badge.style.color = "#ffd400";
+      badge.style.webkitTextStroke = "1.5px #c00";
+      badge.style.textShadow =
+        "-1px -1px 0 #c00, 1px -1px 0 #c00, -1px 1px 0 #c00, 1px 1px 0 #c00";
+      row.appendChild(badge);
+    }
 
-  badge.style.color = "#ffd400";
-  badge.style.webkitTextStroke = "1.5px #c00";
-  badge.style.textShadow =
-    "-1px -1px 0 #c00, 1px -1px 0 #c00, -1px 1px 0 #c00, 1px 1px 0 #c00";
-
-  row.appendChild(badge);
-}
-
-    // タイトル（モーダルリンク）
+    // タイトルリンク
     const a = document.createElement("a");
     a.href = "#";
     a.className = "article-link";
@@ -105,7 +136,7 @@ if (isNewBadge) {
     a.textContent = art.title || "";
     row.appendChild(a);
 
-    // メタ【No.XXXX(yyyy/mm/dd)】（全文検索と同じ体裁に寄せる）
+    // メタ表示
     const meta = document.createElement("span");
     meta.className = "issue-label";
     const issueLabel = issue ? `No.${issue}` : "";
@@ -120,7 +151,10 @@ if (isNewBadge) {
   container.appendChild(frag);
 }
 
-// 検索・カテゴリ別用のフラット表示
+
+// ===============================
+// フラット表示（検索・カテゴリ別）
+// ===============================
 function renderFlatList(container, list) {
   const latestIssueNum = Number(window.__latestIssueNum || 0);
   const frag = document.createDocumentFragment();
@@ -128,18 +162,38 @@ function renderFlatList(container, list) {
   for (const art of list) {
     const { issue, publishDate, issueNum, isBreaking } = getIssueInfo(art);
 
-// 通常記事で、最新号なら NEW
-const isNewBadge = !isBreaking && issueNum === latestIssueNum;
+    const isNewBadge = !isBreaking && issueNum === latestIssueNum;
 
     const row = document.createElement("div");
     row.className = "article-row";
 
+    if (isBreaking) {
+      const badge = document.createElement("span");
+      badge.textContent = "速報!";
+      badge.style.display = "inline-block";
+      badge.style.border = "2px solid #c00";
+      badge.style.color = "#c00";
+      badge.style.fontWeight = "800";
+      badge.style.marginRight = "8px";
+      badge.style.padding = "2px 6px";
+      badge.style.fontSize = "12px";
+      badge.style.lineHeight = "1";
+      badge.style.verticalAlign = "middle";
+      row.appendChild(badge);
+    }
+
     if (isNewBadge) {
       const badge = document.createElement("span");
       badge.textContent = "NEW";
-      badge.style.color = "#c00";
-      badge.style.fontWeight = "700";
+      badge.style.display = "inline-block";
+      badge.style.fontWeight = "800";
       badge.style.marginRight = "8px";
+      badge.style.lineHeight = "1";
+      badge.style.verticalAlign = "middle";
+      badge.style.color = "#ffd400";
+      badge.style.webkitTextStroke = "1.5px #c00";
+      badge.style.textShadow =
+        "-1px -1px 0 #c00, 1px -1px 0 #c00, -1px 1px 0 #c00, 1px 1px 0 #c00";
       row.appendChild(badge);
     }
 
@@ -163,41 +217,6 @@ const isNewBadge = !isBreaking && issueNum === latestIssueNum;
 
   container.innerHTML = "";
   container.appendChild(frag);
-}
-
-// 記事から号数と日付を取り出してラベル用に整形（速報S系対応）
-function getIssueInfo(article) {
-  const rawIssue = String(article.issue ?? "").trim();
-  const slugStr  = String(article.slug || article.articleId || "").trim();
-
-  // 速報（S0000xx）は slug で判定（最も確実）
-  const isBreaking = slugStr.startsWith("S0000");
-
-  // 表示用（No.XXXX）とソート用の issueNum
-  let issueLabel = "";
-  let issueNum = 0;
-
-  if (rawIssue) {
-    // 速報は issue が "S0000" として入ってくる想定
-    if (/^S\d{4}$/i.test(rawIssue)) {
-      issueLabel = rawIssue.toUpperCase(); // "S0000"
-      issueNum = 0; // latestIssue 判定から除外する（後述の最新号算出でも除外）
-    } else {
-      const digits = rawIssue.replace(/\D/g, "");
-      issueLabel = digits ? digits.padStart(4, "0") : rawIssue;
-      issueNum = Number(digits || 0);
-    }
-  } else if (slugStr) {
-    // issue が無ければ slug 先頭4文字が "0001" などの場合だけ拾う
-    const head = slugStr.slice(0, 4).replace(/\D/g, "");
-    if (head) {
-      issueLabel = head.padStart(4, "0");
-      issueNum = Number(head || 0);
-    }
-  }
-
-  const publishDate = article.publishDate || ""; // "2025/08/08" 想定
-  return { issue: issueLabel, issueNum, publishDate, isBreaking };
 }
 
 // =========================
