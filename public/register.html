@@ -4,6 +4,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>新規会員登録</title>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
 
     <style>
         body {
@@ -30,7 +31,6 @@
             color: #002b5c;
             margin-bottom: 20px;
         }
-        /* 契約情報の表示 */
         .contract-info {
             background-color: #e6f7ff;
             border: 1px solid #91d5ff;
@@ -43,7 +43,6 @@
             color: #002b5c;
             font-size: 15px;
         }
-        /* 必須項目の赤文字 */
         .required-star {
             color: red;
             font-weight: bold;
@@ -76,7 +75,7 @@
         .register-button {
             width: 100%;
             padding: 15px;
-            background-color: gray; /* 初期は無効な色 */
+            background-color: gray;
             color: white;
             border: none;
             border-radius: 4px;
@@ -85,7 +84,7 @@
             margin-top: 20px;
         }
         .register-button.active {
-            background-color: #d63333; /* 決済サービスへの誘導を強調 */
+            background-color: #d63333;
             cursor: pointer;
         }
         .register-button.active:hover {
@@ -97,37 +96,29 @@
             margin-bottom: 10px;
             text-align: center;
         }
-        .contact-info {
+        .footer-info {
             margin-top: 30px;
             text-align: center;
             padding: 15px;
             border-top: 1px solid #ccc;
             font-size: 14px;
         }
-/* 新規追加：ラジオボタンの横並び調整 */
-.radio-group {
-    display: flex;
-    align-items: center; /* 縦方向の中央揃え */
-    gap: 20px; /* 選択肢間のスペース */
-}
-
-.radio-group label {
-    display: flex !important; /* display: block; を上書き */
-    align-items: center;
-    margin-bottom: 0 !important; /* 下マージンを解除 */
-    font-weight: normal !important; /* 太字を解除（必要に応じて） */
-    cursor: pointer;
-}
-
-.radio-group input[type="radio"] {
-    width: auto !important; /* ラジオボタンの幅を自動に */
-    margin-right: 5px; /* ボタンと文字の間に少しスペース */
-}
-
-/* 契約者種別のラベルを調整 */
-.input-group label:first-child {
-    margin-bottom: 10px; /* 見出しラベルの下にスペース */
-}
+        .radio-group {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .radio-group label {
+            display: flex !important;
+            align-items: center;
+            margin-bottom: 0 !important;
+            font-weight: normal !important;
+            cursor: pointer;
+        }
+        .radio-group input[type="radio"] {
+            width: auto !important;
+            margin-right: 5px;
+        }
     </style>
 </head>
 <body>
@@ -154,40 +145,38 @@
 
         <div class="input-group">
             <label>契約者種別<span class="required-star">※</span></label>
-            
             <div class="radio-group">
                 <label for="type_corporate">
-                    <input type="radio" id="type_corporate" name="contractType" value="corporate" required>
-                    法人
+                    <input type="radio" id="type_corporate" name="contractType" value="corporate" checked required>
+                    法人名義
                 </label>
-                
                 <label for="type_individual">
                     <input type="radio" id="type_individual" name="contractType" value="individual">
-                    個人
+                    個人名義
                 </label>
             </div>
         </div>
 
-        <div id="nameFields">
-            </div>
-        
+        <div id="nameFields"></div>
+
         <div class="input-group">
-            <label for="furigana">フリガナ<span class="required-star">※</span></label>
-            <input type="text" id="furigana" placeholder="全角カナ" required oninput="checkFormValidity()">
+            <label for="email">通知用E-mail<span class="required-star">※</span></label>
+            <input type="email" id="email" placeholder="example@gmail.com" required oninput="checkFormValidity()">
+            <small>パスワードを忘れた際の復旧や、事務局からの連絡に使用します。</small>
         </div>
 
         <div class="input-group">
-            <label for="email">E-mail<span class="required-star">※</span></label>
-            <input type="email" id="email" required oninput="checkFormValidity()">
-            <small>手続き完了後に申込確認のメールをお送りしますので必ずメールアドレスを入力してください。入力間違いのないようお願いします。</small>
+            <label for="accountId">デジタル版ログインID（任意のアカウント名）<span class="required-star">※</span></label>
+            <input type="text" id="accountId" placeholder="例：hanako123" pattern="^[a-zA-Z0-9]+$" title="半角英数字のみ" required oninput="checkFormValidity()">
+            <small>半角英数字で好きな名前を決めてください。ログイン時に使用します。</small>
         </div>
-<div class="input-group">
-            <label for="digitalPassword">デジタル版ログインパスワード<span class="required-star">※</span></label>
+
+        <div class="input-group">
+            <label for="digitalPassword">デジタル版パスワード<span class="required-star">※</span></label>
             <input type="password" id="digitalPassword" minlength="6" required oninput="checkFormValidity()">
-            <small>6文字以上で設定してください。このパスワードは、決済完了後にデジタル版へのログインに使用します。</small>
+            <small>6文字以上。IDと同じ文字列は避けてください。</small>
         </div>
 
-        
         <div class="input-group">
             <label for="deliveryDestination">お届け先<span class="required-star">※</span></label>
             <select id="deliveryDestination" required onchange="toggleDeliveryCompanyFields(); checkFormValidity();">
@@ -202,56 +191,21 @@
                 <label for="deliveryCompanyName">会社名<span class="required-star">※</span></label>
                 <input type="text" id="deliveryCompanyName" oninput="checkFormValidity()">
             </div>
-            <div class="input-group">
-                <label for="deliveryCompanyFurigana">フリガナ<span class="required-star">※</span></label>
-                <input type="text" id="deliveryCompanyFurigana" placeholder="全角カナ" oninput="checkFormValidity()">
-            </div>
         </div>
 
         <div class="input-group">
             <label for="zipCode">郵便番号<span class="required-star">※</span></label>
-            <input type="text" id="zipCode" maxlength="8" pattern="\d{3}-?\d{4}" title="7桁の数字を入力してください" required oninput="formatZipCode(this); checkFormValidity()">
+            <input type="text" id="zipCode" maxlength="8" placeholder="000-0000" required oninput="formatZipCode(this); checkFormValidity()">
         </div>
 
         <div class="input-group">
             <label for="address">住所<span class="required-star">※</span></label>
             <input type="text" id="address" required oninput="checkFormValidity()">
-            <small>（例）〇〇市〇〇町10-10-10</small>
         </div>
 
-        <div class="input-group">
-            <label for="building">ビル名・階数</label>
-            <input type="text" id="building" oninput="checkFormValidity()">
-            <small>（例）□□ビル5Ｆ</small>
-        </div>
-        
         <div class="input-group">
             <label for="phone">電話番号<span class="required-star">※</span></label>
             <input type="tel" id="phone" required oninput="checkFormValidity()">
-            <small>（例）0138-22-3333<br>※お届け先が会社の場合は会社の電話番号を入力してください。</small>
-        </div>
-
-        <div class="input-group">
-            <label for="mobile">携帯番号<span class="required-star">※</span></label>
-            <input type="tel" id="mobile" required oninput="checkFormValidity()">
-            <small>（例）090-222-3333</small>
-        </div>
-
-        <div class="input-group">
-            <label for="fax">FAX番号<span class="required-star">※</span></label>
-            <input type="tel" id="fax" required oninput="checkFormValidity()">
-            <small>（例）0138-22-3333<br>※お届け先が会社の場合は会社のFax番号を入力してください。</small>
-        </div>
-
-        <div id="workplaceFields" style="display: none;">
-            <div class="input-group">
-                <label for="workplaceName">勤務先</label>
-                <input type="text" id="workplaceName">
-            </div>
-            <div class="input-group">
-                <label for="workplaceFurigana">フリガナ</label>
-                <input type="text" id="workplaceFurigana" placeholder="全角カナ">
-            </div>
         </div>
 
         <div id="corporatePaymentFields" style="display: none;">
@@ -267,8 +221,8 @@
 
         <button class="register-button" id="submitButton" onclick="submitForm()">送信して決済へ進む</button>
     </form>
-    
-    <div class="contact-info">
+
+    <div class="footer-info">
         既に本紙をご購読契約されてる方は<br>
         弊社までご連絡ください。<br><br>
         株式会社 経済ジャーナル<br>
@@ -279,143 +233,110 @@
 </div>
 
 <script>
-    // --- 2. Firebase設定はフォーム処理には直接不要ですが、形式を維持 ---
-    // const firebaseConfig = { ... };
-    // firebase.initializeApp(firebaseConfig);
 
-   const EMAIL_TARGET = 'no71@economicjournal.co.jp';
-    const PAYMENT_URL = 'https://your-payment-service.com/checkout'; // 実際の決済サービスURLに置き換えてください
+const firebaseConfig = {
+  apiKey: "AIzaSyAJT3EnF4s6kfU6RuC9nJvOrs9FtG_RMR0",
+  authDomain: "economic-journals-digital.firebaseapp.com",
+  projectId: "economic-journals-digital",
+  storageBucket: "economic-journals-digital.firebasestorage.app",
+  messagingSenderId: "1032175762907",
+  appId: "1:1032175762907:web:e46fca907bb52c9b5fbbfe"
+};
+
+// 3. Firebaseの初期化
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
+
+
+    const PAYMENT_URL = 'https://your-payment-service.com/checkout';
 
     document.addEventListener('DOMContentLoaded', () => {
-        // 初期状態のフィールド切り替えを設定
         toggleFields();
-        // フォーム入力時のチェックを開始
-        document.getElementById('registrationForm').addEventListener('input', checkFormValidity);
-        // ラジオボタン変更時の強制チェック
         document.querySelectorAll('input[name="contractType"]').forEach(radio => {
             radio.addEventListener('change', toggleFields);
         });
-        document.getElementById('deliveryDestination').addEventListener('change', toggleDeliveryCompanyFields);
     });
 
-    // 契約者種別によって表示するフィールドと必須属性を切り替える (最終版)
     function toggleFields() {
-        const typeCorporate = document.getElementById('type_corporate').checked;
+        const isCorporate = document.getElementById('type_corporate').checked;
         const nameFields = document.getElementById('nameFields');
-        const workplaceFields = document.getElementById('workplaceFields');
-        const corporatePaymentFields = document.getElementById('corporatePaymentFields');
+        const paymentFields = document.getElementById('corporatePaymentFields');
 
-        // -------------------------
-        // 1. 名前入力欄の動的生成と必須属性の適用
-        // -------------------------
-        nameFields.innerHTML = '';
-        if (typeCorporate) {
+        if (isCorporate) {
             nameFields.innerHTML = `
                 <div class="input-group">
                     <label for="corporateName">法人名<span class="required-star">※</span></label>
                     <input type="text" id="corporateName" required>
                 </div>
                 <div class="input-group">
+                    <label for="corporateFurigana">法人名フリガナ<span class="required-star">※</span></label>
+                    <input type="text" id="corporateFurigana" placeholder="全角カナ" required>
+                </div>
+                <div class="input-group">
                     <label for="representativeName">代表者名</label>
                     <input type="text" id="representativeName">
                 </div>
+                <div class="input-group">
+                    <label for="representativeFurigana">代表者名フリガナ</label>
+                    <input type="text" id="representativeFurigana" placeholder="全角カナ">
+                </div>
             `;
-            workplaceFields.style.display = 'none';
-            corporatePaymentFields.style.display = 'block';
-
-            // 個人向けフィールドを非表示にし、値をクリア
-            const individualNameInput = document.getElementById('individualName');
-            if (individualNameInput) {
-                individualNameInput.required = false;
-                individualNameInput.value = '';
-            }
-
-        } else { // 個人の場合
+            paymentFields.style.display = 'block';
+        } else {
             nameFields.innerHTML = `
                 <div class="input-group">
                     <label for="individualName">個人名<span class="required-star">※</span></label>
                     <input type="text" id="individualName" required>
                 </div>
+                <div class="input-group">
+                    <label for="individualFurigana">フリガナ<span class="required-star">※</span></label>
+                    <input type="text" id="individualFurigana" placeholder="全角カナ" required>
+                </div>
+                <div class="input-group">
+                    <label for="workplaceName">運営・所属及び勤務先名<span class="required-star">※</span></label>
+                    <input type="text" id="workplaceName" required>
+                </div>
+                <div class="input-group">
+                    <label for="workplaceFurigana">運営・所属及び勤務先名フリガナ<span class="required-star">※</span></label>
+                    <input type="text" id="workplaceFurigana" placeholder="全角カナ" required>
+                </div>
             `;
-            workplaceFields.style.display = 'block';
-            corporatePaymentFields.style.display = 'none';
-
-            // 法人向けフィールドを非表示にし、値をクリア
-            const corporateNameInput = document.getElementById('corporateName');
-            if (corporateNameInput) {
-                corporateNameInput.required = false;
-                corporateNameInput.value = '';
-            }
+            paymentFields.style.display = 'none';
         }
-        
-        // 新しく生成された要素に input イベントリスナーを再設定
+
         nameFields.querySelectorAll('input').forEach(input => {
-             input.addEventListener('input', checkFormValidity);
+            input.addEventListener('input', checkFormValidity);
         });
-
-        // -------------------------
-        // 2. 他の動的フィールドのチェックと全体のバリデーション実行
-        // -------------------------
-        // 名前フィールドの切り替え後、お届け先の必須チェックも再実行
-        toggleDeliveryCompanyFields();
         checkFormValidity();
     }
 
-    // お届け先が会社で、契約者種別が個人だった場合の追加フィールドの制御
     function toggleDeliveryCompanyFields() {
-        const typeIndividual = document.getElementById('type_individual').checked;
-        const deliveryCompanySelected = document.getElementById('deliveryDestination').value === 'company';
+        const deliveryDestination = document.getElementById('deliveryDestination').value;
         const deliveryCompanyFields = document.getElementById('deliveryCompanyFields');
-        
-        // フィールドがDOMに存在するか確認してから処理
         const companyNameInput = document.getElementById('deliveryCompanyName');
-        const companyFuriganaInput = document.getElementById('deliveryCompanyFurigana');
-        
-        // 必須にする必要があるかどうか
-        const shouldBeRequired = typeIndividual && deliveryCompanySelected;
 
-        if (companyNameInput && companyFuriganaInput) {
-            if (shouldBeRequired) {
-                deliveryCompanyFields.style.display = 'block';
-                companyNameInput.required = true;
-                companyFuriganaInput.required = true;
-            } else {
-                deliveryCompanyFields.style.display = 'none';
-                // 必須属性を動的に削除し、同時に値もクリア
-                companyNameInput.required = false;
-                companyFuriganaInput.required = false;
-                companyNameInput.value = '';
-                companyFuriganaInput.value = '';
-            }
+        if (deliveryDestination === 'company') {
+            deliveryCompanyFields.style.display = 'block';
+            companyNameInput.required = true;
+        } else {
+            deliveryCompanyFields.style.display = 'none';
+            companyNameInput.required = false;
+            companyNameInput.value = '';
         }
-        
-        checkFormValidity(); 
     }
 
-    // 郵便番号のハイフン自動挿入 (修正版)
     function formatZipCode(input) {
-        let value = input.value.replace(/[^\d]/g, ''); // 数字以外を削除
-        
-        // 7桁の数字に制限
-        if (value.length > 7) {
-            value = value.substring(0, 7);
-        }
-
-        // 3桁-4桁の形式に整形
+        let value = input.value.replace(/[^\d]/g, '');
         if (value.length > 3) {
-            value = value.substring(0, 3) + '-' + value.substring(3);
+            value = value.substring(0, 3) + '-' + value.substring(3, 7);
         }
-        
         input.value = value;
-        checkFormValidity();
     }
 
-    // --- フォームのバリデーションチェック ---
     function checkFormValidity() {
         const form = document.getElementById('registrationForm');
         const submitButton = document.getElementById('submitButton');
-        
-        // HTML5の標準バリデーション機能を使って、required項目がすべて満たされているか確認
         if (form.checkValidity()) {
             submitButton.classList.add('active');
             submitButton.disabled = false;
@@ -424,62 +345,99 @@
             submitButton.disabled = true;
         }
     }
-    
-    // --- フォーム送信とメールデータ生成 ---
-    function submitForm() {
+
+    // --- フォーム送信とデータ処理 ---
+    async function submitForm() {
         const form = document.getElementById('registrationForm');
         if (!form.checkValidity()) {
             form.reportValidity();
             return;
         }
 
-        const typeCorporate = document.getElementById('type_corporate').checked;
-        const deliveryDestination = document.getElementById('deliveryDestination').value;
-        
-        // フォームデータを取得・整形
+// 1. データの組み立て
+        const isCorporate = document.getElementById('type_corporate').checked;
+        const now = new Date();
+        const nextYearEndDate = new Date(now.getFullYear() + 1, now.getMonth() + 2, 0);
+        const contractEnd = nextYearEndDate.getFullYear() + '/' + (nextYearEndDate.getMonth() + 1) + '/' + nextYearEndDate.getDate();
+
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('digitalPassword').value; // パスワード取得
+
+        let memberName = "";
+        if (isCorporate) {
+            memberName = (document.getElementById('corporateName').value + " " + (document.getElementById('representativeName').value || "")).trim();
+        } else {
+            memberName = (document.getElementById('individualName').value + " " + (document.getElementById('workplaceName').value || "")).trim();
+        }
+
         const formData = {
-            '種別': typeCorporate ? '法人' : '個人',
-            '法人名': typeCorporate ? (document.getElementById('corporateName') ? document.getElementById('corporateName').value : 'N/A') : 'N/A',
-            '代表者名': typeCorporate ? (document.getElementById('representativeName') ? document.getElementById('representativeName').value : 'N/A') : 'N/A',
-            '個人名': !typeCorporate ? (document.getElementById('individualName') ? document.getElementById('individualName').value : 'N/A') : 'N/A',
-            'フリガナ': document.getElementById('furigana').value,
-            'E-mail': document.getElementById('email').value,
-            'デジタル版ログインパスワード': document.getElementById('digitalPassword').value, // ⬅️ ここを追加
-            'お届け先': deliveryDestination,
-            'お届け先-会社名': (deliveryDestination === 'company' && !typeCorporate) ? document.getElementById('deliveryCompanyName').value : 'N/A',
-            'お届け先-フリガナ': (deliveryDestination === 'company' && !typeCorporate) ? document.getElementById('deliveryCompanyFurigana').value : 'N/A',
-            '郵便番号': document.getElementById('zipCode').value,
-            '住所': document.getElementById('address').value,
-            'ビル名・階数': document.getElementById('building').value,
-            '電話番号': document.getElementById('phone').value,
-            '携帯番号': document.getElementById('mobile').value,
-            'FAX番号': document.getElementById('fax').value,
-            '勤務先': !typeCorporate ? document.getElementById('workplaceName').value : 'N/A',
-            '勤務先フリガナ': !typeCorporate ? document.getElementById('workplaceFurigana').value : 'N/A',
-            '締め日': typeCorporate ? document.getElementById('closingDate').value : 'N/A',
-            '支払日': typeCorporate ? document.getElementById('paymentDate').value : 'N/A',
-            '契約プラン': '年間契約（初年度36,000円）',
-        };
-        
-        console.log('--- 送信データ（JSON形式）---');
-        console.log(JSON.stringify(formData, null, 2));
-        
-        alert('入力内容を確認しました。続いて、決済サービスへ移動します。');
+            'accountId': document.getElementById('accountId').value,
+            'email': email,            'memberName': memberName,
+            'contractEnd': contractEnd,
+            'type': isCorporate ? '法人' : '個人',
+        'furiganaMain': isCorporate ? document.getElementById('corporateFurigana').value : document.getElementById('individualFurigana').value,
+        'furiganaSub': isCorporate ? (document.getElementById('representativeFurigana')?.value || "") : (document.getElementById('workplaceFurigana')?.value || ""),
+        'zipCode': document.getElementById('zipCode').value,
+        'address': document.getElementById('address').value,
+        'phone': document.getElementById('phone').value,
+        'delivery': document.getElementById('deliveryDestination').value,
+        'deliveryCompany': document.getElementById('deliveryCompanyName')?.value || '',
+        'closingDate': isCorporate ? document.getElementById('closingDate').value : '',
+        'paymentDate': isCorporate ? document.getElementById('paymentDate').value : ''
+    };
 
-        document.getElementById('registrationForm').innerHTML = `
-            <h3>お申込みを受け付けました</h3>
-            <p>このデータが**no71@economicjournal.co.jp**へ送信されます。（※現在はローカル処理です）</p>
-            <p>引き続き、**電子決済サービス**へお進みください。</p>
-            <div style="text-align: center; margin-top: 20px;">
-                <a href="${PAYMENT_URL}" target="_blank" class="register-button active" style="text-decoration: none;">決済サービスへ進む（デモ）</a>
-                <p style="margin-top: 15px;"><a href="login.html">ログイン画面へ戻る</a></p>
-            </div>
-        `;
+
+let uid = ""; // UIDを入れる箱を用意
+
+try {
+    // --- 1. Firebase Auth 登録試行 ---
+try {
+    // A. Firebase Auth 登録（新規作成）を試みる
+    const userCredential = await firebase.auth().createUserWithEmailAndPassword(email, password);
+    uid = userCredential.user.uid;
+} catch (error) {
+    if (error.code === 'auth/email-already-in-use') {
+        console.log("既に登録済みです。UIDを再取得して継続します。");
+        
+        // 既に登録されている場合は、一度「ログイン」させてUIDだけ抜き取る
+        // ※パスワードが一致している必要があります
+        const loginUser = await firebase.auth().signInWithEmailAndPassword(email, password);
+        uid = loginUser.user.uid;
+    } else {
+        throw error; // パスワードが短い等のエラーはここで止める
     }
+}
 
-    // 初回実行
-    toggleFields();
-    checkFormValidity();
+// ここまで来れば、新規でも既存でも uid が手に入っている
+formData.uid = uid;
+
+
+        
+        // --- B. GAS（スプレッドシート）へのデータ送信 ---
+        const _key = 'aHR0cHM6Ly9zY3JpcHQuZ29vZ2xlLmNvbS9tYWNyb3Mvcy9BS2Z5Y2J5dElPY2hwSHIxd2RnTWoyZURwYnBId1YzWGRkX2I5Q2RidThFYVZfTUQ3cmI2RkpFSzA0MllpLVQzQ3N6US1pNVQvZXhlYw==';
+        const GAS_URL = window.atob(_key);
+
+        await fetch(GAS_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        });
+
+        // 全て成功したら決済ページへ
+        alert('お申込み内容を送信しました。決済ページへ移動します。');
+        window.location.href = PAYMENT_URL;
+
+    } catch (error) {
+        // Firebaseで既にメールアドレスが使われている場合などのエラー処理
+        console.error("Error during registration:", error);
+        let msg = "登録中にエラーが発生しました。";
+        if (error.code === 'auth/email-already-in-use') {
+            msg = "このメールアドレスは既に登録されています。";
+        }
+        alert(msg);
+    }
+}
 </script>
 </body>
 </html>
