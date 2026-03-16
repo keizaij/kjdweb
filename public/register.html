@@ -346,6 +346,31 @@ if (!firebase.apps.length) {
         }
     }
 
+// ログインIDの入力欄にイベントを設定
+document.getElementById('accountId').addEventListener('blur', async function() {
+    const accountId = this.value;
+    if (!accountId) return;
+
+    const _key = '（あなたのGASのBase64キー）';
+    const GAS_URL = window.atob(_key);
+
+    try {
+        // GASのdoGetを叩いて重複確認
+        const response = await fetch(`${GAS_URL}?accountId=${encodeURIComponent(accountId)}`);
+        const result = await response.json();
+
+        if (result.exists) {
+            alert('このログインIDは既に使用されています。別のIDを入力してください。');
+            this.style.backgroundColor = '#ffcccc'; // 背景を赤くして警告
+            this.value = ''; // 入力をクリア
+        } else {
+            this.style.backgroundColor = ''; // 問題なければ戻す
+        }
+    } catch (error) {
+        console.error("IDチェックエラー:", error);
+    }
+});
+
     // --- フォーム送信とデータ処理 ---
     async function submitForm() {
         const form = document.getElementById('registrationForm');
