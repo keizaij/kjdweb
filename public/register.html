@@ -390,26 +390,24 @@ if (!firebase.apps.length) {
 let uid = ""; // UIDを入れる箱を用意
 
 try {
-    // --- 1. Firebase Auth 登録試行 ---
-try {
-    // A. Firebase Auth 登録（新規作成）を試みる
-    const userCredential = await firebase.auth().createUserWithEmailAndPassword(email, password);
-    uid = userCredential.user.uid;
-} catch (error) {
-    if (error.code === 'auth/email-already-in-use') {
-        console.log("既に登録済みです。UIDを再取得して継続します。");
-        
-        // 既に登録されている場合は、一度「ログイン」させてUIDだけ抜き取る
-        // ※パスワードが一致している必要があります
-        const loginUser = await firebase.auth().signInWithEmailAndPassword(email, password);
-        uid = loginUser.user.uid;
-    } else {
-        throw error; // パスワードが短い等のエラーはここで止める
+    console.log("Firebase処理開始..."); // ①
+    try {
+        const userCredential = await firebase.auth().createUserWithEmailAndPassword(email, password);
+        uid = userCredential.user.uid;
+        console.log("Firebase新規登録成功:", uid); // ②
+    } catch (error) {
+        if (error.code === 'auth/email-already-in-use') {
+            console.log("既存ユーザーのためログイン試行..."); // ③
+            const loginUser = await firebase.auth().signInWithEmailAndPassword(email, password);
+            uid = loginUser.user.uid;
+            console.log("Firebaseログイン成功:", uid); // ④
+        } else {
+            throw error;
+        }
     }
-}
 
-// ここまで来れば、新規でも既存でも uid が手に入っている
-formData.uid = uid;
+    formData.uid = uid;
+    console.log("GAS送信開始:", formData); // ⑤
 
 
         
@@ -425,12 +423,13 @@ formData.uid = uid;
         });
 
         // 全て成功したら決済ページへ
-        alert('お申込み内容を送信しました。決済ページへ移動します。');
-        window.location.href = PAYMENT_URL;
+        console.log("GAS送信完了！"); // ⑥
+    alert('成功');
+    window.location.href = PAYMENT_URL;
 
     } catch (error) {
         // Firebaseで既にメールアドレスが使われている場合などのエラー処理
-        console.error("Error during registration:", error);
+        console.error("致命的エラー:", error); // ⑦
         let msg = "登録中にエラーが発生しました。";
         if (error.code === 'auth/email-already-in-use') {
             msg = "このメールアドレスは既に登録されています。";
