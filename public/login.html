@@ -49,11 +49,12 @@
 
       <button class="btn-slim" onclick="toggleAccordion()">購読契約中の方はこちら（アカウント登録）</button>
       <div id="activateAccordion" class="accordion-content">
-        <input type="text" id="regAccount" placeholder="登録アカウント名">
-        <input type="password" id="regPass" placeholder="登録パスワード">
-        <input type="password" id="regPassConfirm" placeholder="確認用登録パスワード">
-        <input type="text" id="activateCode" placeholder="アクティベートコード（レジストリキー）">
-        <button class="btn-main" onclick="doActivate()">アカウント作成</button>
+        <input type="text" id="regAccount" placeholder="希望アカウント名（ログイン用）">
+  <input type="email" id="regEmail" placeholder="メールアドレス（Firebase登録用）">
+  <input type="password" id="regPass" placeholder="パスワード">
+  <input type="password" id="regPassConfirm" placeholder="確認用パスワード">
+  <input type="text" id="activateCode" placeholder="アクティベートコード（郵送封書のキー）">
+  <button class="btn-main" onclick="doActivate()">アカウント作成</button>
       </div>
 
       <hr>
@@ -113,53 +114,53 @@
 
     // --- アカウント作成（アクティベート処理） ---
     async function doActivate() {
-      const accountId = document.getElementById('regAccount').value;
-      const pass = document.getElementById('regPass').value;
-      const passConf = document.getElementById('regPassConfirm').value;
-      const code = document.getElementById('activateCode').value;
-      const msg = document.getElementById('loginMessage');
+  const accountId = document.getElementById('regAccount').value;
+  const email = document.getElementById('regEmail').value;
+  const pass = document.getElementById('regPass').value;
+  const passConf = document.getElementById('regPassConfirm').value;
+  const code = document.getElementById('activateCode').value;
+  const msg = document.getElementById('loginMessage');
 
-      if (pass !== passConf) { msg.textContent = "パスワードが一致しません"; return; }
-      if (!code) { msg.textContent = "コードを入力してください"; return; }
+      if (!accountId || !email || !pass || !code) { msg.textContent = "全ての項目を入力してください"; return; }
+  if (pass !== passConf) { msg.textContent = "パスワードが一致しません"; return; }
 
-      msg.textContent = "確認中...";
+  msg.textContent = "アカウント作成中...";
 
-      try {
-        const gasUrl = window.atob(SHARED_KEY);
-        
-        // 1. まずFirebaseにアカウントを作る（ここでメールアドレスがないので工夫が必要）
-        // ※ 購読者用は一旦「アカウント名@dummy.com」などでFirebaseに登録する形になります
-        const dummyEmail = accountId + "@internal.journal"; // システム内部用のアドレス
-        const userCredential = await auth.createUserWithEmailAndPassword(dummyEmail, pass);
-        const uid = userCredential.user.uid;
+      let userCredential;
+  try {
+    // 1. Firebase Auth にメールとパスワードで新規登録
+    userCredential = await auth.createUserWithEmailAndPassword(email, pass);
+    const uid = userCredential.user.uid;
 
-        // 2. GASに「UID」と「コード」を送って照合する
-        // ※ mode: 'no-cors' は消します（中身を読めるようにするため）
-        const response = await fetch(gasUrl, {
-          method: 'POST',
-          body: JSON.stringify({
-            action: 'activate',
-            accountId: accountId,
-            activateCode: code,
-            uid: uid
-          })
-        });
+    // 2. GASに送信して、コードの照合とスプレッドシートへの書き込みを行う
+    const gasUrl = window.atob(SHARED_KEY);
+    const response = await fetch(gasUrl, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'activate',
+        accountId: accountId,
+        email: email,
+        activateCode: code,
+        uid: uid
+      })
+    });
         
         const resultText = await response.text();
 
-        if (resultText.includes("ACTIVATE_SUCCESS")) {
-            alert("アカウントの紐付けが完了しました！そのままログインいただけます。");
-            window.location.href = 'index.html';
-        } else {
-            // 失敗した場合はFirebaseに作ったユーザーを消さないと、次回登録できなくなる
-            await userCredential.user.delete();
-            msg.textContent = "アクティベートコードまたはアカウント名が正しくありません。";
-        }
-      } catch (e) {
-        console.error(e);
-        msg.textContent = "作成に失敗しました。既に登録されているか、コードが違います。";
-      }
+    if (resultText.includes("ACTIVATE_SUCCESS")) {
+      alert("アカウント作成と紐付けが完了しました！");
+      window.location.href = 'index.html';
+    } else {
+      // GAS側でコード不一致などの場合、Firebaseに作ったユーザーを削除してやり直しさせる
+      await userCredential.user.delete();
+      msg.textContent = "アクティベートコードが正しくありません。";
     }
-  </script>
+  } catch (error) {
+    console.error(error);
+    msg.textContent = "エラー: " + error.message;
+    // 既にメルアドが使われている等の場合、ここで止まります
+  }
+}
+</script>
 </body>
 </html>
