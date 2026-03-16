@@ -128,14 +128,13 @@
 
       let userCredential;
   try {
-    // 1. Firebase Auth にメールとパスワードで新規登録
-    userCredential = await auth.createUserWithEmailAndPassword(email, pass);
-    const uid = userCredential.user.uid;
+    // ここで定義する変数名と、下の fetch で使う名前を「gasUrl」に統一します
+    const _key = SHARED_KEY; // 前に定義したBase64のキー
+    const gasUrl = window.atob(_key); // ここで gasUrl を定義！
 
-    // 2. GASに送信（bodyのJSON化とヘッダー指定を確実にする）
-    const response = await fetch(gasUrl, {
+    // 2. GASに送信
+    const response = await fetch(gasUrl, { // ここで gasUrl を使う！
       method: 'POST',
-      // ★重要：GASに「これはJSONですよ」と教える
       headers: { 'Content-Type': 'text/plain' }, 
       body: JSON.stringify({
         action: 'activate',
