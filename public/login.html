@@ -132,10 +132,11 @@
     userCredential = await auth.createUserWithEmailAndPassword(email, pass);
     const uid = userCredential.user.uid;
 
-    // 2. GASに送信して、コードの照合とスプレッドシートへの書き込みを行う
-    const gasUrl = window.atob(SHARED_KEY);
+    // 2. GASに送信（bodyのJSON化とヘッダー指定を確実にする）
     const response = await fetch(gasUrl, {
       method: 'POST',
+      // ★重要：GASに「これはJSONですよ」と教える
+      headers: { 'Content-Type': 'text/plain' }, 
       body: JSON.stringify({
         action: 'activate',
         accountId: accountId,
