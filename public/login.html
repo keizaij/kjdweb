@@ -114,52 +114,52 @@
 
     // --- アカウント作成（アクティベート処理） ---
     async function doActivate() {
-  const accountId = document.getElementById('regAccount').value;
-  const email = document.getElementById('regEmail').value;
-  const pass = document.getElementById('regPass').value;
-  const passConf = document.getElementById('regPassConfirm').value;
-  const code = document.getElementById('activateCode').value;
-  const msg = document.getElementById('loginMessage');
+    const accountId = document.getElementById('regAccount').value;
+    const email = document.getElementById('regEmail').value;
+    const pass = document.getElementById('regPass').value;
+    const passConf = document.getElementById('regPassConfirm').value;
+    const code = document.getElementById('activateCode').value;
+    const msg = document.getElementById('loginMessage');
 
-      if (!accountId || !email || !pass || !code) { msg.textContent = "全ての項目を入力してください"; return; }
-  if (pass !== passConf) { msg.textContent = "パスワードが一致しません"; return; }
+    if (!accountId || !email || !pass || !code) { msg.textContent = "全ての項目を入力してください"; return; }
+    if (pass !== passConf) { msg.textContent = "パスワードが一致しません"; return; }
 
-  msg.textContent = "アカウント作成中...";
+    msg.textContent = "アカウント作成中...";
 
-      let userCredential;
-  try {
-    // ここで定義する変数名と、下の fetch で使う名前を「gasUrl」に統一します
-    const _key = SHARED_KEY; // 前に定義したBase64のキー
-    const gasUrl = window.atob(_key); // ここで gasUrl を定義！
+    try {
+        // 1. Firebase Auth に新規登録
+        const userCredential = await auth.createUserWithEmailAndPassword(email, pass);
+        // ここで定義した uid を、すぐ下の fetch で使います
+        const uid = userCredential.user.uid; 
 
-    // 2. GASに送信
-    const response = await fetch(gasUrl, { // ここで gasUrl を使う！
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' }, 
-      body: JSON.stringify({
-        action: 'activate',
-        accountId: accountId,
-        email: email,
-        activateCode: code,
-        uid: uid
-      })
-    });
+        // 2. GASに送信
+        const gasUrl = window.atob(SHARED_KEY);
+        const response = await fetch(gasUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' }, 
+            body: JSON.stringify({
+                action: 'activate',
+                accountId: accountId,
+                email: email,
+                activateCode: code,
+                uid: uid // ← ここで正しく参照できるようになります
+            })
+        });
         
         const resultText = await response.text();
 
-    if (resultText.includes("ACTIVATE_SUCCESS")) {
-      alert("アカウント作成と紐付けが完了しました！");
-      window.location.href = 'index.html';
-    } else {
-      // GAS側でコード不一致などの場合、Firebaseに作ったユーザーを削除してやり直しさせる
-      await userCredential.user.delete();
-      msg.textContent = "アクティベートコードが正しくありません。";
+        if (resultText.includes("ACTIVATE_SUCCESS")) {
+            alert("アカウント作成と紐付けが完了しました！");
+            window.location.href = 'index.html';
+        } else {
+            // 失敗した場合はFirebaseユーザーを削除
+            await userCredential.user.delete();
+            msg.textContent = "アクティベートコードが正しくありません。";
+        }
+    } catch (error) {
+        console.error(error);
+        msg.textContent = "エラー: " + error.message;
     }
-  } catch (error) {
-    console.error(error);
-    msg.textContent = "エラー: " + error.message;
-    // 既にメルアドが使われている等の場合、ここで止まります
-  }
 }
 </script>
 </body>
