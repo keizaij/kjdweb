@@ -122,26 +122,42 @@
       if (pass !== passConf) { msg.textContent = "パスワードが一致しません"; return; }
       if (!code) { msg.textContent = "コードを入力してください"; return; }
 
-      msg.textContent = "アカウント作成中...";
+      msg.textContent = "確認中...";
 
       try {
         const gasUrl = window.atob(SHARED_KEY);
-        // GAS側に「このIDとコードが一致するか」を確認し、Firebase登録する処理を投げる
+        
+        // 1. まずFirebaseにアカウントを作る（ここでメールアドレスがないので工夫が必要）
+        // ※ 購読者用は一旦「アカウント名@dummy.com」などでFirebaseに登録する形になります
+        const dummyEmail = accountId + "@internal.journal"; // システム内部用のアドレス
+        const userCredential = await auth.createUserWithEmailAndPassword(dummyEmail, pass);
+        const uid = userCredential.user.uid;
+
+        // 2. GASに「UID」と「コード」を送って照合する
+        // ※ mode: 'no-cors' は消します（中身を読めるようにするため）
         const response = await fetch(gasUrl, {
           method: 'POST',
-          mode: 'no-cors',
           body: JSON.stringify({
             action: 'activate',
             accountId: accountId,
-            password: pass,
-            activateCode: code
+            activateCode: code,
+            uid: uid
           })
         });
         
-        alert("アカウントを作成しました。ログインしてください。");
-        location.reload();
+        const resultText = await response.text();
+
+        if (resultText.includes("ACTIVATE_SUCCESS")) {
+            alert("アカウントの紐付けが完了しました！そのままログインいただけます。");
+            window.location.href = 'index.html';
+        } else {
+            // 失敗した場合はFirebaseに作ったユーザーを消さないと、次回登録できなくなる
+            await userCredential.user.delete();
+            msg.textContent = "アクティベートコードまたはアカウント名が正しくありません。";
+        }
       } catch (e) {
-        msg.textContent = "作成に失敗しました。内容を確認してください。";
+        console.error(e);
+        msg.textContent = "作成に失敗しました。既に登録されているか、コードが違います。";
       }
     }
   </script>
