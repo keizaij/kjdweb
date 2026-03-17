@@ -71,13 +71,13 @@
       projectId: "economic-journals-digital",
       storageBucket: "economic-journals-digital.firebasestorage.app",
       messagingSenderId: "1032175762907",
-      appId: "G-R2P1T1QR7X"
+      appId: "1:1032175762907:web:e46fca907bb52c9b5fbbfe"
     };
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
 
     // GASのURL（Base64）
-    const SHARED_KEY = 'aHR0cHM6Ly9zY3JpcHQuZ29vZ2xlLmNvbS9tYWNyb3Mvcy9BS2Z5Y2J5dElPY2hwSHIxd2RnTWoyZURwYnBId1YzWGRkX2I5Q2RidThFYVZfTUQ3cmI2RkpFSzA0MllpLVQzQ3N6US1pNVQvZXhlYw==';
+    const SHARED_KEY = 'aHR0cHM6Ly9zY3JpcHQuZ29vZ2xlLmNvbS9tYWNyb3Mvcy9BS2Z5Y2J3UGI2eHlGOWFHWW1TNm1nQlVpeWpObGJjbFBnQXVPYWUyZG1VWlFwbGVRdDZBSW5ocjcxUjdxX1FSd1loSGl1QlAvZXhlYw===';
 
     function toggleAccordion() {
       const content = document.getElementById('activateAccordion');
@@ -86,80 +86,87 @@
 
     // --- ログイン処理（アカウント名からメルアドを逆引き） ---
     async function doLogin() {
-      const accountId = document.getElementById('loginAccount').value;
-      const pass = document.getElementById('loginPass').value;
-      const msg = document.getElementById('loginMessage');
-      
-      if(!accountId || !pass) { msg.textContent = "未入力項目があります"; return; }
-      msg.textContent = "認証中...";
+  const accountId = document.getElementById('loginAccount').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const msg = document.getElementById('loginMessage');
 
-      try {
-        const gasUrl = window.atob(SHARED_KEY);
-        // GASにメールアドレスを問い合わせる（accountIdをキーにする）
-        const response = await fetch(`${gasUrl}?action=getEmail&accountId=${encodeURIComponent(accountId)}`);
-        const result = await response.json();
+  if (!accountId || !pass) {
+    msg.textContent = "未入力項目があります";
+    return;
+  }
 
-        if (!result.email) {
-          msg.textContent = "アカウントが見つかりません。";
-          return;
-        }
+  msg.textContent = "認証中...";
 
-        // 取得したメールアドレスでFirebaseログイン
-        await auth.signInWithEmailAndPassword(result.email, pass);
-        window.location.href = 'index.html';
-      } catch (e) {
-        msg.textContent = "ログインに失敗しました。パスワードを確認してください。";
-      }
+  try {
+    const response = await fetch(`${GAS_URL}?action=getEmail&accountId=${encodeURIComponent(accountId)}`);
+    const result = await response.json();
+
+    if (!result.email) {
+      msg.textContent = "アカウントが見つかりません。";
+      return;
     }
+
+    await auth.signInWithEmailAndPassword(result.email, pass);
+    location.href = 'index.html';
+  } catch (e) {
+    console.error(e);
+    msg.textContent = "ログインに失敗しました。";
+  }
+}
 
     // --- アカウント作成（アクティベート処理） ---
     async function doActivate() {
-    const accountId = document.getElementById('regAccount').value;
-    const email = document.getElementById('regEmail').value;
-    const pass = document.getElementById('regPass').value;
-    const passConf = document.getElementById('regPassConfirm').value;
-    const code = document.getElementById('activateCode').value;
-    const msg = document.getElementById('loginMessage');
+  const accountId = document.getElementById('regAccount').value.trim();
+  const email = document.getElementById('regEmail').value.trim();
+  const pass = document.getElementById('regPass').value;
+  const passConf = document.getElementById('regPassConfirm').value;
+  const code = document.getElementById('activateCode').value.trim().toUpperCase();
+  const msg = document.getElementById('loginMessage');
 
-    if (!accountId || !email || !pass || !code) { msg.textContent = "全ての項目を入力してください"; return; }
-    if (pass !== passConf) { msg.textContent = "パスワードが一致しません"; return; }
+  if (!accountId || !email || !pass || !passConf || !code) {
+    msg.textContent = "全ての項目を入力してください";
+    return;
+  }
+  if (pass !== passConf) {
+    msg.textContent = "パスワードが一致しません";
+    return;
+  }
 
-    msg.textContent = "アカウント作成中...";
+  msg.textContent = "アカウント作成中...";
 
-    try {
-        // 1. Firebase Auth に新規登録
-        const userCredential = await auth.createUserWithEmailAndPassword(email, pass);
-        // ここで定義した uid を、すぐ下の fetch で使います
-        const uid = userCredential.user.uid; 
+  let userCredential = null;
 
-        // 2. GASに送信
-        const gasUrl = window.atob(SHARED_KEY);
-        const response = await fetch(gasUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' }, 
-            body: JSON.stringify({
-                action: 'activate',
-                accountId: accountId,
-                email: email,
-                activateCode: code,
-                uid: uid // ← ここで正しく参照できるようになります
-            })
-        });
-        
-        const resultText = await response.text();
+  try {
+    userCredential = await auth.createUserWithEmailAndPassword(email, pass);
+    const uid = userCredential.user.uid;
 
-        if (resultText.includes("ACTIVATE_SUCCESS")) {
-            alert("アカウント作成と紐付けが完了しました！");
-            window.location.href = 'index.html';
-        } else {
-            // 失敗した場合はFirebaseユーザーを削除
-            await userCredential.user.delete();
-            msg.textContent = "アクティベートコードが正しくありません。";
-        }
-    } catch (error) {
-        console.error(error);
-        msg.textContent = "エラー: " + error.message;
+    const response = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'activate',
+        accountId,
+        email,
+        activateCode: code,
+        uid
+      })
+    });
+
+    const resultText = await response.text();
+    console.log('activate result:', resultText);
+
+    if (resultText.includes("ACTIVATE_SUCCESS")) {
+      alert("アカウント作成と紐付けが完了しました。");
+      location.href = 'index.html';
+    } else {
+      await userCredential.user.delete();
+      msg.textContent = "アクティベートコードが正しくありません。";
     }
+
+  } catch (error) {
+    console.error(error);
+    msg.textContent = "エラー: " + error.message;
+  }
 }
 </script>
 </body>
