@@ -96,20 +96,26 @@
   }
 
   msg.textContent = "認証中...";
+  console.log('[login] accountId =', accountId);
 
   try {
-    const response = await fetch(`${GAS_URL}?action=getEmail&accountId=${encodeURIComponent(accountId)}`);
+    const gasUrl = GAS_URL; // 直書き推奨
+    const response = await fetch(`${gasUrl}?action=getEmail&accountId=${encodeURIComponent(accountId)}`);
     const result = await response.json();
+
+    console.log('[login] getEmail result =', result);
 
     if (!result.email) {
       msg.textContent = "アカウントが見つかりません。";
       return;
     }
 
-    await auth.signInWithEmailAndPassword(result.email, pass);
+    const cred = await auth.signInWithEmailAndPassword(result.email, pass);
+    console.log('[login] firebase signIn success uid =', cred.user.uid);
+
     location.href = 'index.html';
   } catch (e) {
-    console.error(e);
+    console.error('[login] error =', e);
     msg.textContent = "ログインに失敗しました。";
   }
 }
