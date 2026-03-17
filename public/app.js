@@ -1,6 +1,6 @@
 // ====== 設定（あなたの Hosting パスに合わせて書く） ======
 const MANIFEST_URL = '/_manifest.json';
-const SEARCH_SOURCE_URL = '/_search_source.json';
+const SEARCH_SOURCE_BY_YEAR_INDEX_URL = "/build_plain_articles/search_source_by_year/index.json";
 
 
 // =========================
@@ -466,6 +466,11 @@ let staticSearchIndex   = null;
 let staticSearchLoaded  = false;
 let staticSearchLoading = false;
 
+const staticSearchYearCache = new Map();   // year -> docs[]
+let staticSearchYearIndex = null;          // index.json の中身
+let staticSearchYearIndexLoading = false;
+
+
 /**
  * 年・カテゴリの条件に合う記事一覧を allArticles から絞り込む
  */
@@ -508,124 +513,104 @@ function filterBaseArticlesByYearCategory() {
   return { base, year, category };
 }
 
-// =========================
-// /indexes/search-index.json または /_search_source.json を読み込み
-// 形式は { docs:[...] } / { items:[...] } / [...] / { key: obj, ... } のどれでもOK
-// =========================
-async function loadStaticSearchIndex() {
-  if (staticSearchLoaded && staticSearchIndex) return staticSearchIndex;
 
-  if (staticSearchLoading) {
-    while (staticSearchLoading) {
+
+async function loadSearchYearIndex() {
+  if (staticSearchYearIndex) return staticSearchYearIndex;
+
+  if (staticSearchYearIndexLoading) {
+    while (staticSearchYearIndexLoading) {
       await new Promise((r) => setTimeout(r, 50));
     }
-    return staticSearchIndex;
+    return staticSearchYearIndex;
   }
 
-  staticSearchLoading = true;
+  staticSearchYearIndexLoading = true;
 
   try {
-    // ★ここだけパスを合わせる
-    const res = await fetch("/build_plain_articles/_search_source.json", { cache: "no-store" });
+    const res = await fetch(SEARCH_SOURCE_BY_YEAR_INDEX_URL, { cache: "no-store" });
     if (!res.ok) {
-      throw new Error("_search_source.json が見つかりません");
+      throw new Error("search_source_by_year/index.json が見つかりません");
     }
-    const json = await res.json();
 
-    // 🔹 オブジェクトの中の文字列を全部つなげて1本のテキストにするヘルパー
-    const collectStrings = (v) => {
-      const buf = [];
-      const walk = (x) => {
-        if (x == null) return;
-        if (typeof x === "string") {
-          buf.push(x);
-        } else if (Array.isArray(x)) {
-          for (const y of x) walk(y);
-        } else if (typeof x === "object") {
-          for (const k in x) {
-            if (Object.prototype.hasOwnProperty.call(x, k)) {
-              walk(x[k]);
-            }
-          }
-        }
-      };
-      walk(v);
-      return buf.join(" ");
+    const json = await res.json();
+    const years = Array.isArray(json?.years) ? json.years.slice() : [];
+
+    // 新しい年順
+    years.sort((a, b) => Number(b.year || 0) - Number(a.year || 0));
+
+    staticSearchYearIndex = {
+      ...json,
+      years
     };
 
-    let docsArray;
-
-    // ★ここを最優先：articles 配列があればそれを使う
-    if (Array.isArray(json?.articles)) {
-      docsArray = json.articles.map((d, idx) => {
-        const rawId = String(d.slug || d.articleId || d.id || idx);
-        const numericId = rawId.replace(/\D/g, "") || rawId;
-        return {
-          ...d,
-          id: numericId,
-          slug: d.slug || numericId,
-          articleId: d.articleId || numericId,
-          text: d.text || collectStrings(d),
-        };
-      });
-    } else if (Array.isArray(json?.docs)) {
-      // 形式: { "docs": [ { slug, articleId, text, ... }, ... ] }
-      docsArray = json.docs.map((d, idx) => {
-        const rawId = String(d.slug || d.articleId || d.id || idx);
-        const numericId = rawId.replace(/\D/g, "") || rawId;
-        return {
-          ...d,
-          id: numericId,
-          slug: d.slug || numericId,
-          articleId: d.articleId || numericId,
-          text: d.text || collectStrings(d),
-        };
-      });
-    } else if (Array.isArray(json)) {
-      // 形式: [ { slug, articleId, text, ... }, ... ]
-      docsArray = json.map((d, idx) => {
-        const rawId = String(d.slug || d.articleId || d.id || idx);
-        const numericId = rawId.replace(/\D/g, "") || rawId;
-        return {
-          ...d,
-          id: numericId,
-          slug: d.slug || numericId,
-          articleId: d.articleId || numericId,
-          text: d.text || collectStrings(d),
-        };
-      });
-    } else if (json && typeof json === "object") {
-      // 汎用フォールバック: { "215303": { ... }, ... } みたいな場合用
-      docsArray = Object.entries(json).map(([id, value]) => {
-        const rawId = String(id);
-        const numericId = rawId.replace(/\D/g, "") || rawId;
-        return {
-          id: numericId,
-          slug: numericId,
-          articleId: numericId,
-          text: collectStrings(value),
-        };
-      });
-    } else {
-      docsArray = [];
-    }
-
-    staticSearchIndex = docsArray;
-    staticSearchLoaded = true;
-
-    console.log(
-      "[SEARCH] static index loaded from /_search_source.json. docs =",
-      staticSearchIndex.length
-    );
-    if (staticSearchIndex.length > 0) {
-      console.log("[SEARCH] sample doc =", staticSearchIndex[0]);
-    }
-
-    return staticSearchIndex;
+    console.log("[SEARCH] year index loaded:", staticSearchYearIndex);
+    return staticSearchYearIndex;
   } finally {
-    staticSearchLoading = false;
+    staticSearchYearIndexLoading = false;
   }
 }
+
+
+async function loadStaticSearchIndexYear(yearEntry) {
+  const year = String(yearEntry?.year || "").trim();
+  const path = String(yearEntry?.path || "").trim();
+
+  if (!year || !path) return [];
+
+  if (staticSearchYearCache.has(year)) {
+    return staticSearchYearCache.get(year);
+  }
+
+  const res = await fetch("/" + path.replace(/^\/+/, ""), { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`${path} が見つかりません`);
+  }
+
+  const json = await res.json();
+
+  const collectStrings = (v) => {
+    const buf = [];
+    const walk = (x) => {
+      if (x == null) return;
+      if (typeof x === "string") {
+        buf.push(x);
+      } else if (Array.isArray(x)) {
+        for (const y of x) walk(y);
+      } else if (typeof x === "object") {
+        for (const k in x) {
+          if (Object.prototype.hasOwnProperty.call(x, k)) {
+            walk(x[k]);
+          }
+        }
+      }
+    };
+    walk(v);
+    return buf.join(" ");
+  };
+
+  let docsArray = [];
+
+  if (Array.isArray(json?.articles)) {
+    docsArray = json.articles.map((d, idx) => {
+      const rawId = String(d.slug || d.articleId || d.id || idx);
+      const numericId = rawId.replace(/\D/g, "") || rawId;
+      return {
+        ...d,
+        id: numericId,
+        slug: d.slug || numericId,
+        articleId: d.articleId || numericId,
+        text: d.text || collectStrings(d),
+      };
+    });
+  }
+
+  staticSearchYearCache.set(year, docsArray);
+  console.log(`[SEARCH] year docs loaded: ${year} / ${docsArray.length}件`);
+  return docsArray;
+}
+
+
 
 // クエリの正規化（とりあえず trim のみ）
 function normalizeQuery(q) {
@@ -682,123 +667,7 @@ async function doSearchAndRender() {
     return;
   }
 
-  // 🔹検索中メッセージ
-  if (resultEl) {
-    resultEl.innerHTML = '<div class="search-message">検索中...</div>';
-  }
 
-  // 🔹静的インデックス読み込み
-  let docs;
-  try {
-    docs = await loadStaticSearchIndex();
-  } catch (e) {
-    console.error("[SEARCH] 静的インデックス読み込み失敗:", e);
-    // フォールバック: タイトルだけで検索
-    const qLower = query.toLowerCase();
-    const fallback = base.filter((a) =>
-      (a.title || "").toLowerCase().includes(qLower)
-    );
-    renderArticles(fallback, { mode: "flat" });
-    if (!fallback.length && resultEl) {
-      resultEl.innerHTML =
-        '<div class="search-message">該当する記事はありません。</div>';
-    }
-    return;
-  }
-
-  const tokens = simpleTokenize(query);
-  if (!tokens.length) {
-    renderArticles(base, { mode: "flat" });
-    return;
-  }
-
-  // 🔹 docs の想定: { slug, articleId, text } の配列
-  const hits = [];
-  outer: for (const d of docs) {
-    const text = String(d.text || "").toLowerCase();
-    if (!text) continue; // 空テキストはスキップ
-    for (const t of tokens) {
-      if (!text.includes(t.toLowerCase())) {
-        continue outer;
-      }
-    }
-    hits.push(d);
-  }
-
-  // 🔹 今の年&カテゴリ条件に合う slug/ID だけに絞る
-  const allowedIds = new Set();
-  const idToArticle = new Map();
-
-  for (const a of base) {
-    const rawId = String(a.slug || a.articleId || "").trim();
-    if (!rawId) continue;
-
-    // そのままのID
-    allowedIds.add(rawId);
-    idToArticle.set(rawId, a);
-
-    // 数字だけのIDも許可（"215301.json" と "215301" のズレ吸収）
-    const numericId = rawId.replace(/\D/g, "");
-    if (numericId && numericId !== rawId) {
-      allowedIds.add(numericId);
-      if (!idToArticle.has(numericId)) {
-        idToArticle.set(numericId, a);
-      }
-    }
-  }
-
-  const finalList = [];
-  for (const d of hits) {
-    let id = String(d.slug || d.articleId || d.id || "").trim();
-    if (!id) continue;
-
-    let numericId = id.replace(/\D/g, "");
-
-    const candidates = [id];
-    if (numericId && numericId !== id) {
-      candidates.push(numericId);
-    }
-
-    let foundArticle = null;
-    for (const cid of candidates) {
-      if (allowedIds.has(cid)) {
-        foundArticle = idToArticle.get(cid);
-        if (foundArticle) break;
-      }
-    }
-
-    if (foundArticle) {
-      finalList.push(foundArticle);
-    }
-  }
-
-  // 🔹 もし全文インデックスではヒットしたのに ID がズレている場合
-  //    → タイトル・カテゴリの単純検索でフォールバック
-  if (!finalList.length) {
-    const qLower = query.toLowerCase();
-    const fallback = base.filter((a) => {
-      const t = String(a.title || "").toLowerCase();
-      const c = String(a.category || "").toLowerCase();
-      return t.includes(qLower) || c.includes(qLower);
-    });
-
-    renderArticles(fallback, { mode: "flat" });
-    if (!fallback.length && resultEl) {
-      resultEl.innerHTML =
-        '<div class="search-message">該当する記事はありません。</div>';
-    }
-    return;
-  }
-
-// ★ 非表示除外
-const visibleList = finalList.filter(a => !a.isHidden);
-
-  renderArticles(finalList, { mode: "flat" });
-
-  if (!finalList.length && resultEl) {
-    resultEl.innerHTML =
-      '<div class="search-message">該当する記事はありません。</div>';
-  }}
 
 // ===============================
 // 記事一覧ロード本体 (GitHub _manifest.json)
