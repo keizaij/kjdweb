@@ -86,28 +86,47 @@ window.addEventListener('unhandledrejection', e => {
 <script>
 (function guardMemberPage() {
   const LOGIN_URL = window.LOGIN_URL || 'login.html';
+  const GAS_URL = 'ここに login.html / register.html と同じ GAS の WebアプリURL';
 
-  // auth がまだ無い時の保険（読み込み順で事故るのを防ぐ）
   if (!window.auth || !window.auth.onAuthStateChanged) {
     console.error('[auth] window.auth is not ready');
     return;
   }
 
   window.auth.onAuthStateChanged(async (user) => {
-    if (!user) {
-      // 未ログイン → loginへ
+    try {
+      if (!user) {
+        location.replace(LOGIN_URL);
+        return;
+      }
+
+      console.log('[auth] signed in:', user.uid);
+
+      // GASに UID を渡して、会員リストの G列が「有」か確認
+      const res = await fetch(`${GAS_URL}?action=checkAccess&uid=${encodeURIComponent(user.uid)}`);
+      const result = await res.json();
+
+      console.log('[auth] checkAccess result:', result);
+
+      if (!result.ok) {
+        await window.auth.signOut();
+        location.replace(LOGIN_URL);
+        return;
+      }
+
+      // ここで初めてページ表示
+      document.body.style.display = 'block';
+
+      // 必要ならここで記事読み込み開始
+      // await loadArticles();
+
+    } catch (err) {
+      console.error('[auth] guard error', err);
+      try { await window.auth.signOut(); } catch (_) {}
       location.replace(LOGIN_URL);
-      return;
     }
-
-    // ログイン済み → ここで初めてページの本処理を開始
-    console.log('[auth] signed in:', user.uid);
-
-    // 例）あなたの記事読み込み開始関数があるならここで呼ぶ
-    // await loadArticles();
   }, (err) => {
     console.error('[auth] onAuthStateChanged error', err);
-    // ここで落ちると保護が壊れるので、表示も変えると親切
     const el = document.getElementById('initialLoadingMessage');
     if (el) el.textContent = '認証状態の取得に失敗しました（再読み込みしてください）';
   });
@@ -121,7 +140,7 @@ window.addEventListener('unhandledrejection', e => {
 
 
 </head>
-<body>
+<body style="display:none;">
     <div class="fixed-container">
 <div class="header-bar">
   <div class="header-inner">
