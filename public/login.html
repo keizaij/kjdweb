@@ -79,7 +79,8 @@ if (!firebase.apps.length) {
 const auth = firebase.auth();
 
 // これを必ず定義
-const GAS_URL = 'aHR0cHM6Ly9zY3JpcHQuZ29vZ2xlLmNvbS9tYWNyb3Mvcy9BS2Z5Y2J3UGI2eHlGOWFHWW1TNm1nQlVpeWpObGJjbFBnQXVPYWUyZG1VWlFwbGVRdDZBSW5ocjcxUjdxX1FSd1loSGl1QlAvZXhlYw==';
+  const SHARED_KEY =  'aHR0cHM6Ly9zY3JpcHQuZ29vZ2xlLmNvbS9tYWNyb3Mvcy9BS2Z5Y2J3UGI2eHlGOWFHWW1TNm1nQlVpeWpObGJjbFBnQXVPYWUyZG1VWlFwbGVRdDZBSW5ocjcxUjdxX1FSd1loSGl1QlAvZXhlYw==';
+  const GAS_URL = window.atob(SHARED_KEY);
 
 function toggleAccordion() {
   const content = document.getElementById('activateAccordion');
