@@ -85,50 +85,58 @@ window.addEventListener('unhandledrejection', e => {
 
 <script>
 (function guardMemberPage() {
-  const LOGIN_URL = window.LOGIN_URL || 'login.html';
-  const GAS_URL = 'ここに login.html / register.html と同じ GAS の WebアプリURL';
+  const LOGIN_URL = 'login.html';
+  const GAS_URL = 'https://script.google.com/macros/s/XXXXXXXXXXXX/exec';
 
   if (!window.auth || !window.auth.onAuthStateChanged) {
-    console.error('[auth] window.auth is not ready');
+    console.error('[guard] window.auth is not ready');
     return;
   }
 
   window.auth.onAuthStateChanged(async (user) => {
     try {
+      console.log('[guard] auth state changed. user =', user ? user.uid : null);
+
       if (!user) {
+        console.log('[guard] no user -> redirect login');
         location.replace(LOGIN_URL);
         return;
       }
 
-      console.log('[auth] signed in:', user.uid);
+      const url = `${GAS_URL}?action=checkAccess&uid=${encodeURIComponent(user.uid)}`;
+      console.log('[guard] checkAccess url =', url);
 
-      // GASに UID を渡して、会員リストの G列が「有」か確認
-      const res = await fetch(`${GAS_URL}?action=checkAccess&uid=${encodeURIComponent(user.uid)}`);
-      const result = await res.json();
+      const res = await fetch(url);
+      const text = await res.text();
+      console.log('[guard] raw response =', text);
 
-      console.log('[auth] checkAccess result:', result);
-
-      if (!result.ok) {
+      let result;
+      try {
+        result = JSON.parse(text);
+      } catch (e) {
+        console.error('[guard] JSON parse failed', e);
         await window.auth.signOut();
         location.replace(LOGIN_URL);
         return;
       }
 
-      // ここで初めてページ表示
+      console.log('[guard] parsed result =', result);
+
+      if (!result.ok) {
+        console.log('[guard] result.ok is false -> signOut');
+        await window.auth.signOut();
+        location.replace(LOGIN_URL);
+        return;
+      }
+
+      console.log('[guard] access granted');
       document.body.style.display = 'block';
 
-      // 必要ならここで記事読み込み開始
-      // await loadArticles();
-
     } catch (err) {
-      console.error('[auth] guard error', err);
+      console.error('[guard] error =', err);
       try { await window.auth.signOut(); } catch (_) {}
       location.replace(LOGIN_URL);
     }
-  }, (err) => {
-    console.error('[auth] onAuthStateChanged error', err);
-    const el = document.getElementById('initialLoadingMessage');
-    if (el) el.textContent = '認証状態の取得に失敗しました（再読み込みしてください）';
   });
 })();
 </script>
