@@ -458,22 +458,13 @@ function normalizeCategoriesToMap(raw) {
 
 
 // =========================
-// 年・カテゴリ・全文検索（静的インデックス）
+// 年・カテゴリ・全文検索（年別 search_source）
 // =========================
-
-// 静的インデックス（/indexes/search-index.json）をキャッシュ
-let staticSearchIndex   = null;
-let staticSearchLoaded  = false;
-let staticSearchLoading = false;
 
 const staticSearchYearCache = new Map();   // year -> docs[]
 let staticSearchYearIndex = null;          // index.json の中身
 let staticSearchYearIndexLoading = false;
 
-
-/**
- * 年・カテゴリの条件に合う記事一覧を allArticles から絞り込む
- */
 function filterBaseArticlesByYearCategory() {
   const yearSel     = document.getElementById("yearFilter");
   const categorySel = document.getElementById("categoryFilter");
@@ -483,7 +474,6 @@ function filterBaseArticlesByYearCategory() {
 
   let base = Array.isArray(window.allArticles) ? [...window.allArticles] : [];
 
-  // 年フィルタ（publishDate 先頭4桁）
   if (year !== "all") {
     base = base.filter((a) => {
       const y = a.publishDate ? String(a.publishDate).slice(0, 4) : "";
@@ -491,14 +481,11 @@ function filterBaseArticlesByYearCategory() {
     });
   }
 
-  // カテゴリフィルタ
   if (category !== "all") {
     base = base.filter((a) => {
-      // categoryIds 配列優先
       if (Array.isArray(a.categoryIds) && a.categoryIds.includes(category)) {
         return true;
       }
-      // category の文字列にも一応対応
       if (a.category) {
         const cats = String(a.category)
           .split(",")
@@ -512,8 +499,6 @@ function filterBaseArticlesByYearCategory() {
 
   return { base, year, category };
 }
-
-
 
 async function loadSearchYearIndex() {
   if (staticSearchYearIndex) return staticSearchYearIndex;
@@ -536,7 +521,6 @@ async function loadSearchYearIndex() {
     const json = await res.json();
     const years = Array.isArray(json?.years) ? json.years.slice() : [];
 
-    // 新しい年順
     years.sort((a, b) => Number(b.year || 0) - Number(a.year || 0));
 
     staticSearchYearIndex = {
@@ -550,7 +534,6 @@ async function loadSearchYearIndex() {
     staticSearchYearIndexLoading = false;
   }
 }
-
 
 async function loadStaticSearchIndexYear(yearEntry) {
   const year = String(yearEntry?.year || "").trim();
@@ -610,28 +593,19 @@ async function loadStaticSearchIndexYear(yearEntry) {
   return docsArray;
 }
 
-
-
-// クエリの正規化（とりあえず trim のみ）
 function normalizeQuery(q) {
   return (q || "").trim();
 }
 
-// 日本語2文字でもまとめて扱うシンプル版（スペースで分割）
 function simpleTokenize(str) {
   const s = String(str || "").trim();
   if (!s) return [];
-  // 全角スペースも含めて区切る
   return s
     .split(/[ \u3000]+/)
     .map(t => t.trim())
     .filter(Boolean);
 }
 
-
-/**
- * 年・カテゴリ・キーワードを総合して検索→描画
- */
 async function doSearchAndRender() {
   const searchBox = document.getElementById("searchInput");
   const yearSel   = document.getElementById("yearFilter");
@@ -642,18 +616,12 @@ async function doSearchAndRender() {
   const year  = (yearSel ? yearSel.value : "all").trim();
   const cat   = (catSel ? catSel.value : "all").trim();
 
-  // まずは年・カテゴリだけで絞り込み
   const { base } = filterBaseArticlesByYearCategory();
 
-  // 🔹クエリが空なら、年&カテゴリのみ
   if (!query) {
-    const isYearSpecific = year !== "all";
-    const isCatSpecific  = cat  !== "all";
-
-    // 👉 デフォルトは grouped
+    const isCatSpecific = cat !== "all";
     let mode = "grouped";
 
-    // 👉 カテゴリが絞られているときだけ flat にする
     if (isCatSpecific) {
       mode = "flat";
     }
@@ -666,6 +634,149 @@ async function doSearchAndRender() {
     }
     return;
   }
+
+  if (resultEl) {
+    resultEl.innerHTML = '<div class="search-message">検索中...</div>';
+  }
+
+  const tokens = simpleTokenize(query);
+  if (!tokens.length) {
+    renderArticles(base, { mode: "flat" });
+    return;
+  }
+
+  const allowedIds = new Set();
+  const idToArticle = new Map();
+
+  for (const a of base) {
+    const rawId = String(a.slug || a.articleId || "").trim();
+    if (!rawId) continue;
+
+    allowedIds.add(rawId);
+    idToArticle.set(rawId, a);
+
+    const numericId = rawId.replace(/\D/g, "");
+    if (numericId && numericId !== rawId) {
+      allowedIds.add(numericId);
+      if (!idToArticle.has(numericId)) {
+        idToArticle.set(numericId, a);
+      }
+    }
+  }
+
+  let yearIndex;
+  try {
+    yearIndex = await loadSearchYearIndex();
+  } catch (e) {
+    console.error("[SEARCH] 年別インデックス読み込み失敗:", e);
+    if (resultEl) {
+      resultEl.innerHTML = '<div class="search-message">検索インデックスの読み込みに失敗しました。</div>';
+    }
+    return;
+  }
+
+  let targetYears = Array.isArray(yearIndex?.years) ? yearIndex.years.slice() : [];
+
+  if (year !== "all") {
+    targetYears = targetYears.filter(y => String(y.year) === String(year));
+  }
+
+  targetYears.sort((a, b) => Number(b.year || 0) - Number(a.year || 0));
+
+  const finalMap = new Map();
+  let displayedAny = false;
+
+  for (const yearEntry of targetYears) {
+    let docs = [];
+    try {
+      docs = await loadStaticSearchIndexYear(yearEntry);
+    } catch (e) {
+      console.warn(`[SEARCH] ${yearEntry?.year}年の検索データ読込失敗:`, e);
+      continue;
+    }
+
+    const hits = [];
+
+    outer: for (const d of docs) {
+      const text = String(d.text || "").toLowerCase();
+      if (!text) continue;
+
+      for (const t of tokens) {
+        if (!text.includes(t.toLowerCase())) {
+          continue outer;
+        }
+      }
+      hits.push(d);
+    }
+
+    for (const d of hits) {
+      let id = String(d.slug || d.articleId || d.id || "").trim();
+      if (!id) continue;
+
+      const numericId = id.replace(/\D/g, "");
+      const candidates = [id];
+      if (numericId && numericId !== id) candidates.push(numericId);
+
+      let foundArticle = null;
+      for (const cid of candidates) {
+        if (allowedIds.has(cid)) {
+          foundArticle = idToArticle.get(cid);
+          if (foundArticle) break;
+        }
+      }
+
+      if (foundArticle && !foundArticle.isHidden) {
+        const key = String(foundArticle.slug || foundArticle.articleId || "");
+        if (key && !finalMap.has(key)) {
+          finalMap.set(key, foundArticle);
+        }
+      }
+    }
+
+    const partialList = Array.from(finalMap.values());
+
+    partialList.sort((a, b) => {
+      const ad = String(a.publishDate || "");
+      const bd = String(b.publishDate || "");
+      if (ad !== bd) return bd.localeCompare(ad);
+
+      const as = String(a.slug || "");
+      const bs = String(b.slug || "");
+      return bs.localeCompare(as);
+    });
+
+    renderArticles(partialList, { mode: "flat" });
+    displayedAny = partialList.length > 0;
+
+    if (resultEl) {
+      const oldMsgs = resultEl.querySelectorAll(".search-progress-message");
+      oldMsgs.forEach(el => el.remove());
+
+      const msg = document.createElement("div");
+      msg.className = "search-message search-progress-message";
+      msg.textContent = `${yearEntry.year}年まで検索しました（現在 ${partialList.length} 件）`;
+      resultEl.prepend(msg);
+    }
+  }
+
+  const finalList = Array.from(finalMap.values());
+
+  finalList.sort((a, b) => {
+    const ad = String(a.publishDate || "");
+    const bd = String(b.publishDate || "");
+    if (ad !== bd) return bd.localeCompare(ad);
+
+    const as = String(a.slug || "");
+    const bs = String(b.slug || "");
+    return bs.localeCompare(as);
+  });
+
+  renderArticles(finalList, { mode: "flat" });
+
+  if (!displayedAny && resultEl) {
+    resultEl.innerHTML = '<div class="search-message">該当する記事はありません。</div>';
+  }
+}
 
 
 
