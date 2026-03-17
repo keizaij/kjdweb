@@ -64,28 +64,29 @@
   </div>
 
   <script>
-    // --- Firebase初期化（既存設定を使用） ---
-    const firebaseConfig = {
-      apiKey: "AIzaSyAJT3EnF4s6kfU6RuC9nJvOrs9FtG_RMR0",
-      authDomain: "economic-journals-digital.firebaseapp.com",
-      projectId: "economic-journals-digital",
-      storageBucket: "economic-journals-digital.firebasestorage.app",
-      messagingSenderId: "1032175762907",
-      appId: "1:1032175762907:web:e46fca907bb52c9b5fbbfe"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
+const firebaseConfig = {
+  apiKey: "AIzaSyAJT3EnF4s6kfU6RuC9nJvOrs9FtG_RMR0",
+  authDomain: "economic-journals-digital.firebaseapp.com",
+  projectId: "economic-journals-digital",
+  storageBucket: "economic-journals-digital.firebasestorage.app",
+  messagingSenderId: "1032175762907",
+  appId: "1:1032175762907:web:e46fca907bb52c9b5fbbfe"
+};
 
-    // GASのURL（Base64）
-    const SHARED_KEY = 'aHR0cHM6Ly9zY3JpcHQuZ29vZ2xlLmNvbS9tYWNyb3Mvcy9BS2Z5Y2J3UGI2eHlGOWFHWW1TNm1nQlVpeWpObGJjbFBnQXVPYWUyZG1VWlFwbGVRdDZBSW5ocjcxUjdxX1FSd1loSGl1QlAvZXhlYw===';
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
+const auth = firebase.auth();
 
-    function toggleAccordion() {
-      const content = document.getElementById('activateAccordion');
-      content.style.display = (content.style.display === 'block') ? 'none' : 'block';
-    }
+// これを必ず定義
+const GAS_URL = 'aHR0cHM6Ly9zY3JpcHQuZ29vZ2xlLmNvbS9tYWNyb3Mvcy9BS2Z5Y2J3UGI2eHlGOWFHWW1TNm1nQlVpeWpObGJjbFBnQXVPYWUyZG1VWlFwbGVRdDZBSW5ocjcxUjdxX1FSd1loSGl1QlAvZXhlYw==';
 
-    // --- ログイン処理（アカウント名からメルアドを逆引き） ---
-    async function doLogin() {
+function toggleAccordion() {
+  const content = document.getElementById('activateAccordion');
+  content.style.display = (content.style.display === 'block') ? 'none' : 'block';
+}
+
+async function doLogin() {
   const accountId = document.getElementById('loginAccount').value.trim();
   const pass = document.getElementById('loginPass').value;
   const msg = document.getElementById('loginMessage');
@@ -99,8 +100,7 @@
   console.log('[login] accountId =', accountId);
 
   try {
-    const gasUrl = GAS_URL; // 直書き推奨
-    const response = await fetch(`${gasUrl}?action=getEmail&accountId=${encodeURIComponent(accountId)}`);
+    const response = await fetch(`${GAS_URL}?action=getEmail&accountId=${encodeURIComponent(accountId)}`);
     const result = await response.json();
 
     console.log('[login] getEmail result =', result);
@@ -113,15 +113,14 @@
     const cred = await auth.signInWithEmailAndPassword(result.email, pass);
     console.log('[login] firebase signIn success uid =', cred.user.uid);
 
-    location.href = 'index.html';
+    window.location.href = 'index.html';
   } catch (e) {
     console.error('[login] error =', e);
     msg.textContent = "ログインに失敗しました。";
   }
 }
 
-    // --- アカウント作成（アクティベート処理） ---
-    async function doActivate() {
+async function doActivate() {
   const accountId = document.getElementById('regAccount').value.trim();
   const email = document.getElementById('regEmail').value.trim();
   const pass = document.getElementById('regPass').value;
@@ -159,18 +158,21 @@
     });
 
     const resultText = await response.text();
-    console.log('activate result:', resultText);
+    console.log('[activate] result =', resultText);
 
     if (resultText.includes("ACTIVATE_SUCCESS")) {
       alert("アカウント作成と紐付けが完了しました。");
-      location.href = 'index.html';
+      window.location.href = 'index.html';
+    } else if (resultText.includes("ACTIVATE_ALREADY_USED")) {
+      await userCredential.user.delete();
+      msg.textContent = "このアクティベートコードはすでに使用されています。";
     } else {
       await userCredential.user.delete();
       msg.textContent = "アクティベートコードが正しくありません。";
     }
 
   } catch (error) {
-    console.error(error);
+    console.error('[activate] error =', error);
     msg.textContent = "エラー: " + error.message;
   }
 }
