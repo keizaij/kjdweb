@@ -440,12 +440,18 @@ try {
         const _key = 'aHR0cHM6Ly9zY3JpcHQuZ29vZ2xlLmNvbS9tYWNyb3Mvcy9BS2Z5Y2J3UGI2eHlGOWFHWW1TNm1nQlVpeWpObGJjbFBnQXVPYWUyZG1VWlFwbGVRdDZBSW5ocjcxUjdxX1FSd1loSGl1QlAvZXhlYw==';
         const GAS_URL = window.atob(_key);
 
-        await fetch(GAS_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(formData)
-        });
+        const response = await fetch(GAS_URL, {
+  method: 'POST',
+  headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+  body: JSON.stringify(formData)
+});
+
+const resultText = await response.text();
+console.log('GAS response:', resultText);
+
+if (!resultText.includes('Success')) {
+  throw new Error('GAS書き込み失敗: ' + resultText);
+}
 
         // 全て成功したら決済ページへ
         console.log("GAS送信完了！"); // ⑥
