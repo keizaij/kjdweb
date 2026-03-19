@@ -99,12 +99,14 @@ async function doLogin() {
 
   msg.textContent = "認証中...";
   console.log('[login] accountId =', accountId);
+  console.log('[login] GAS_URL =', GAS_URL);
 
   try {
     const response = await fetch(`${GAS_URL}?action=getEmail&accountId=${encodeURIComponent(accountId)}`);
-    const result = await response.json();
+    const text = await response.text();
+    console.log('[login] raw response =', text);
 
-    console.log('[login] getEmail result =', result);
+    const result = JSON.parse(text);
 
     if (!result.email) {
       msg.textContent = "アカウントが見つかりません。";
